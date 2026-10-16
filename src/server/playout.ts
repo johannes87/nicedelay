@@ -221,7 +221,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       kind: t.kind,
       from: fromDelay,
       to: toDelay,
-      phases: { intro: t.A, scrub: t.B, land: t.C },
+      phases: { intro: t.introSeconds, scrub: t.scrubSeconds, land: t.landSeconds },
     });
     this.emit('change');
   }
@@ -441,18 +441,19 @@ interface PhaseOutput {
 }
 
 /**
- * One rewind / fast-forward animation. Timeline (seconds):
- *   A  intro — the current picture keeps playing, dims, the icon pops in
- *   B  scrub — thumbnails race from the old position to the new one
- *   C  land  — crossfade into the new source while the graphics fade out
+ * One rewind / fast-forward animation, in three phases:
+ *   intro — the current picture keeps playing, dims, the icon pops in
+ *   scrub — thumbnails race from the old position to the new one
+ *   land  — crossfade into the new source while the graphics fade out
  */
 class Transition {
   readonly kind: TransitionKind;
   readonly fromDelay: number;
   readonly toDelay: number;
-  readonly A = 0.22;
-  readonly B: number;
-  readonly C = 0.5;
+  readonly introSeconds = 0.22;
+  /** longer for bigger jumps, see the constructor */
+  readonly scrubSeconds: number;
+  readonly landSeconds = 0.5;
   readonly target: Source;
   old: Source | null;
   done = false;
@@ -480,7 +481,8 @@ class Transition {
     this.fromDelay = fromDelay;
     this.toDelay = toDelay;
     this.kind = toDelay > fromDelay ? 'rewind' : 'forward';
-    this.B = Math.min(1.35, 0.7 + 0.25 * Math.log10(1 + Math.abs(toDelay - fromDelay) / 5));
+    // Bigger jumps scrub a little longer: 0.78 s for 5 s, 1.15 s for 5 min, at most 1.35 s.
+    this.scrubSeconds = Math.min(1.35, 0.7 + 0.25 * Math.log10(1 + Math.abs(toDelay - fromDelay) / 5));
     this.fps = playout.fps;
     this.drawEvery = Math.max(1, Math.round(playout.fps / MAX_DRAW_FPS));
     this.thumbW = Math.round(playout.w / 10) * 2;
@@ -489,32 +491,35 @@ class Transition {
 
     const store = playout.store;
     const L0 = store.liveEdge;
-    const land = this.A + this.B;
+    const landsAt = this.introSeconds + this.scrubSeconds;
     this.old = playout.source;
     if (toDelay === 0) {
       this.target = { kind: 'live' };
-      this.scrubTo = L0 + land;
+      this.scrubTo = L0 + landsAt;
     } else {
       // Start decoding now so the picture is ready exactly when the scrub lands.
-      const reader = new BufferReader({ store, config: playout.config, t: L0 + land - toDelay });
+      const reader = new BufferReader({ store, config: playout.config, t: L0 + landsAt - toDelay });
       this.target = { kind: 'reader', reader };
       this.scrubTo = reader.startTime;
     }
-    this.scrubFrom = L0 - fromDelay + this.A;
+    this.scrubFrom = L0 - fromDelay + this.introSeconds;
     // The track's left end is the larger of the two delays, so the knob travels the full width.
     this.span = Math.max(fromDelay, toDelay);
     const { sound, soundVolume } = playout.config.transition;
-    this.sfx = sound ? tapeWhoosh(this.kind, land + 0.25, soundVolume) : null;
+    this.sfx = sound ? tapeWhoosh(this.kind, landsAt + 0.25, soundVolume) : null;
   }
 
   get progress(): number {
-    return clamp01(this.i / this.fps / (this.A + this.B + this.C));
+    return clamp01(this.i / this.fps / (this.introSeconds + this.scrubSeconds + this.landSeconds));
   }
 
   /** Whether the current phase consumes the live feed (otherwise Playout keeps it trimmed). */
   wantsLive(): boolean {
     const t = this.i / this.fps;
-    return (t < this.A && this.old?.kind === 'live') || (t >= this.A + this.B && this.target.kind === 'live');
+    return (
+      (t < this.introSeconds && this.old?.kind === 'live') ||
+      (t >= this.introSeconds + this.scrubSeconds && this.target.kind === 'live')
+    );
   }
 
   private get targetReady(): boolean {
@@ -528,7 +533,7 @@ class Transition {
     const video = this.i % this.drawEvery === 0 || !this.drawn ? Buffer.allocUnsafe(this.playout.frameBytes) : null;
     this.i++;
     let out: PhaseOutput;
-    if (t < this.A) out = this.intro(video, t);
+    if (t < this.introSeconds) out = this.intro(video, t);
     else if (this.scrubbing(t)) out = this.scrub(video, t);
     else out = this.land(video, t);
     if (video) {
@@ -542,13 +547,13 @@ class Transition {
 
   /** Scrub until its time is up — and hold there while the target decoder warms up. */
   private scrubbing(t: number): boolean {
-    return t < this.A + this.B || (!this.targetReady && this.waited < READY_TIMEOUT * this.fps);
+    return t < this.introSeconds + this.scrubSeconds || (!this.targetReady && this.waited < READY_TIMEOUT * this.fps);
   }
 
-  /** A: keep the old picture moving while it dims. */
+  /** Intro: keep the old picture moving while it dims. */
   private intro(video: Buffer | null, t: number): PhaseOutput {
     const playout = this.playout;
-    const e = easeOut(t / this.A);
+    const e = easeOut(t / this.introSeconds);
     const src = this.old ? playout.pullFrom(this.old, 'none') : null;
     if (src) {
       playout.lastFrame = src.video;
@@ -562,16 +567,16 @@ class Transition {
       tapeEffect(video, playout.w, playout.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
       this.held = video;
     }
-    const center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / this.A), progress: 0 };
+    const center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / this.introSeconds), progress: 0 };
     return { audio: src?.audio ?? null, center, delay: this.fromDelay, lineAlpha: e };
   }
 
-  /** B: race through thumbnails from the old position to the new one. */
+  /** Scrub: race through thumbnails from the old position to the new one. */
   private scrub(video: Buffer | null, t: number): PhaseOutput {
     const playout = this.playout;
-    if (t >= this.A + this.B) this.waited++;
+    if (t >= this.introSeconds + this.scrubSeconds) this.waited++;
     this.releaseOld();
-    const u = easeInOut(clamp01((t - this.A) / this.B));
+    const u = easeInOut(clamp01((t - this.introSeconds) / this.scrubSeconds));
     if (video) {
       this.drawThumb(video, this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
       tapeEffect(video, playout.w, playout.h, 0.95, this.i * 7919, (t * 1.9) % 1);
@@ -581,10 +586,10 @@ class Transition {
     return { audio: null, center, delay: this.fromDelay + (this.toDelay - this.fromDelay) * u, lineAlpha: 1 };
   }
 
-  /** C: crossfade into the new source while the graphics fade out. */
+  /** Land: crossfade into the new source while the graphics fade out. */
   private land(video: Buffer | null, t: number): PhaseOutput {
     const playout = this.playout;
-    const e = easeOut(clamp01((t - this.A - this.B - this.waited / this.fps) / this.C));
+    const e = easeOut(clamp01((t - this.introSeconds - this.scrubSeconds - this.waited / this.fps) / this.landSeconds));
     const src = playout.pullFrom(this.target, 'fast');
     if (src) {
       this.incoming = src.video;
