@@ -21,6 +21,13 @@ const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const backOut = (t: number) => 1 + 2.9 * (t - 1) ** 3 + 1.9 * (t - 1) ** 2;
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
 
+/** Corner pill: fade in quickly, hold, then fade out. */
+function pillAlpha(age: number): number {
+  if (age < 0.3) return easeOut(age / 0.3);
+  if (age < PILL_HOLD) return 1;
+  return 1 - (age - PILL_HOLD) / PILL_FADE;
+}
+
 type LiveSource = { kind: 'live' };
 type ReaderSource = { kind: 'reader'; reader: BufferReader };
 type Source = LiveSource | ReaderSource;
@@ -291,7 +298,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       }
     }
     // Keep the real delay honest: drift, underruns and slow starts accumulate.
-    if (correct !== 'none') {
+    // Without OBS the live edge stands still, so there is nothing to track: just play out.
+    if (correct !== 'none' && this.ingest.connected) {
       const err = this.store.liveEdge - r.position - this.targetDelay;
       const now = this.ticks / this.fps;
       if (correct === 'fast' && err > 2 / this.fps) {
@@ -305,10 +313,12 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     return r.pull(r.queue.length >= r.maxQueue - 1);
   }
 
+  pullFrom(src: Source, correct: Correction = 'steady'): AVFrame | null {
+    return src.kind === 'live' ? this.pullLive() : this.pullReader(src, correct);
+  }
+
   private pullSource(): AVFrame | null {
-    if (!this.source) return null;
-    if (this.source.kind === 'live') return this.pullLive();
-    return this.pullReader(this.source);
+    return this.source ? this.pullFrom(this.source) : null;
   }
 
   private finishTransition(): void {
@@ -334,9 +344,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     let alpha = this.config.transition.badge && this.mode === 'delayed' ? 0.9 : 0;
     if (this.pill) {
       const age = (this.ticks - this.pill.start) / this.fps;
-      const a = age < 0.3 ? easeOut(age / 0.3) : age < PILL_HOLD ? 1 : 1 - (age - PILL_HOLD) / PILL_FADE;
       if (age > PILL_HOLD + PILL_FADE) this.pill = null;
-      alpha = Math.max(alpha, clamp01(a));
+      alpha = Math.max(alpha, clamp01(pillAlpha(age)));
     }
     if (alpha <= 0) return null;
     if (this.mode === 'delayed') return { kind: 'replay', text: `REPLAY  ${formatDelay(this.targetDelay)}`, alpha };
@@ -416,6 +425,16 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   }
 }
 
+/** What one animation phase contributes to a frame besides the picture. */
+interface PhaseOutput {
+  /** source audio for this frame (already faded), or null for silence */
+  audio: Buffer | null;
+  center: { alpha: number; pop: number; progress: number };
+  /** delay shown by the timecode and the timeline knob */
+  delay: number;
+  lineAlpha: number;
+}
+
 /**
  * One rewind / fast-forward animation. Timeline (seconds):
  *   A  intro — the current picture keeps playing, dims, the icon pops in
@@ -486,93 +505,109 @@ class Transition {
   }
 
   render(): AVFrame {
-    const p = this.p;
     const t = this.i / this.fps;
-    const audioOff = this.i * p.audioBytes;
+    const audioOff = this.i * this.p.audioBytes;
     this.i++;
-    const { w, h } = p;
-    const { A, B, C } = this;
-    const video: Buffer = Buffer.allocUnsafe(p.frameBytes);
-    let audio: Buffer = Buffer.alloc(p.audioBytes);
-    let center: { alpha: number; pop: number; progress: number; d: number };
-    let knob: number;
-    let lineAlpha: number;
-
-    if (t < A) {
-      // A: keep the old picture moving while it dims
-      const e = easeOut(t / A);
-      const old = this.old;
-      const src = old ? (old.kind === 'live' ? p.pullLive() : p.pullReader(old, 'none')) : null;
-      const base = src?.video ?? p.lastFrame ?? p.standbyFrame();
-      if (src) {
-        p.lastFrame = src.video;
-        audio = src.audio;
-        mixInto(audio, 1 - e, null, 0);
-      }
-      toneFrame(base, video, w, h, { luma: 1 - 0.4 * e, sat: 1 - 0.55 * e });
-      tapeEffect(video, w, h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
-      center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / A), progress: 0, d: this.fromDelay };
-      knob = this.fromDelay;
-      lineAlpha = e;
-      this.held = video;
-    } else if (t < A + B || (!this.targetReady && this.waited < READY_TIMEOUT * this.fps)) {
-      // B: scrub (or hold at the end of it while the target decoder warms up)
-      if (t >= A + B) this.waited++;
-      if (this.old?.kind === 'reader' && this.old !== this.target) {
-        this.old.reader.destroy();
-        this.old = null;
-      }
-      const u = easeInOut(clamp01((t - A) / B));
-      const thumb = p.store.thumbAt(this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
-      const tw = Math.round(w / 10) * 2;
-      const th = Math.round(h / 10) * 2;
-      if (thumb && thumb.frame.length === frameSize(tw, th)) {
-        scaleFrame(thumb.frame, tw, th, video, w, h, { luma: 0.62, sat: 0.42 });
-      } else if (this.held) {
-        this.held.copy(video);
-      }
-      tapeEffect(video, w, h, 0.95, this.i * 7919, (t * 1.9) % 1);
-      const d = this.fromDelay + (this.toDelay - this.fromDelay) * u;
-      center = { alpha: 1, pop: 1 + 0.03 * Math.sin(t * 18), progress: u, d };
-      knob = d;
-      lineAlpha = 1;
-      this.lastScrub = video;
-    } else {
-      // C: land
-      const c = clamp01((t - A - B - this.waited / this.fps) / C);
-      const target = this.target;
-      const src = target.kind === 'live' ? p.pullLive() : p.pullReader(target, 'fast');
-      const e = easeOut(c);
-      if (src) {
-        this.incoming = src.video;
-        audio = src.audio;
-        mixInto(audio, e, null, 0);
-      }
-      const from = this.lastScrub ?? this.held ?? p.standbyFrame();
-      if (this.incoming) {
-        crossfade(from, this.incoming, video, e);
-        tapeEffect(video, w, h, 0.6 * (1 - e), this.i * 7919, (t * 1.9) % 1);
-      } else {
-        from.copy(video);
-      }
-      center = { alpha: 1 - e, pop: 1 + 0.18 * e, progress: 1, d: this.toDelay };
-      knob = this.toDelay;
-      lineAlpha = 1 - e;
-      if (c >= 1) this.done = true;
-    }
-
-    const toLive = this.toDelay === 0;
-    p.overlay.drawCenter(video, {
-      kind: this.kind,
-      alpha: center.alpha,
-      pop: center.pop,
-      progress: center.progress,
-      timecode: toLive && center.progress > 0.97 ? 'LIVE' : formatDelay(center.d),
-      label: this.kind === 'rewind' ? 'REWINDING' : toLive ? 'BACK TO LIVE' : 'SKIPPING AHEAD',
-    });
-    p.overlay.drawTimeline(video, { alpha: lineAlpha, span: this.span, knob });
+    const video = Buffer.allocUnsafe(this.p.frameBytes);
+    let out: PhaseOutput;
+    if (t < this.A) out = this.intro(video, t);
+    else if (this.scrubbing(t)) out = this.scrub(video, t);
+    else out = this.land(video, t);
+    this.drawGraphics(video, out);
+    const audio = out.audio ?? Buffer.alloc(this.p.audioBytes);
     if (this.sfx) mixInto(audio, 1, this.sfx, audioOff);
     return { video, audio };
+  }
+
+  /** Scrub until its time is up — and hold there while the target decoder warms up. */
+  private scrubbing(t: number): boolean {
+    return t < this.A + this.B || (!this.targetReady && this.waited < READY_TIMEOUT * this.fps);
+  }
+
+  /** A: keep the old picture moving while it dims. */
+  private intro(video: Buffer, t: number): PhaseOutput {
+    const p = this.p;
+    const e = easeOut(t / this.A);
+    const src = this.old ? p.pullFrom(this.old, 'none') : null;
+    if (src) {
+      p.lastFrame = src.video;
+      mixInto(src.audio, 1 - e, null, 0);
+    }
+    toneFrame(src?.video ?? p.lastFrame ?? p.standbyFrame(), video, p.w, p.h, { luma: 1 - 0.4 * e, sat: 1 - 0.55 * e });
+    tapeEffect(video, p.w, p.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
+    this.held = video;
+    const center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / this.A), progress: 0 };
+    return { audio: src?.audio ?? null, center, delay: this.fromDelay, lineAlpha: e };
+  }
+
+  /** B: race through thumbnails from the old position to the new one. */
+  private scrub(video: Buffer, t: number): PhaseOutput {
+    const p = this.p;
+    if (t >= this.A + this.B) this.waited++;
+    this.releaseOld();
+    const u = easeInOut(clamp01((t - this.A) / this.B));
+    this.drawThumb(video, this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
+    tapeEffect(video, p.w, p.h, 0.95, this.i * 7919, (t * 1.9) % 1);
+    this.lastScrub = video;
+    const center = { alpha: 1, pop: 1 + 0.03 * Math.sin(t * 18), progress: u };
+    return { audio: null, center, delay: this.fromDelay + (this.toDelay - this.fromDelay) * u, lineAlpha: 1 };
+  }
+
+  /** C: crossfade into the new source while the graphics fade out. */
+  private land(video: Buffer, t: number): PhaseOutput {
+    const p = this.p;
+    const e = easeOut(clamp01((t - this.A - this.B - this.waited / this.fps) / this.C));
+    const src = p.pullFrom(this.target, 'fast');
+    if (src) {
+      this.incoming = src.video;
+      mixInto(src.audio, e, null, 0);
+    }
+    const from = this.lastScrub ?? this.held ?? p.standbyFrame();
+    if (this.incoming) {
+      crossfade(from, this.incoming, video, e);
+      tapeEffect(video, p.w, p.h, 0.6 * (1 - e), this.i * 7919, (t * 1.9) % 1);
+    } else {
+      from.copy(video);
+    }
+    if (e >= 1) this.done = true;
+    const center = { alpha: 1 - e, pop: 1 + 0.18 * e, progress: 1 };
+    return { audio: src?.audio ?? null, center, delay: this.toDelay, lineAlpha: 1 - e };
+  }
+
+  /** The old reader is no longer needed once the scrub starts. */
+  private releaseOld(): void {
+    if (this.old?.kind === 'reader' && this.old !== this.target) {
+      this.old.reader.destroy();
+      this.old = null;
+    }
+  }
+
+  private drawThumb(video: Buffer, pos: number): void {
+    const { w, h } = this.p;
+    const tw = Math.round(w / 10) * 2;
+    const th = Math.round(h / 10) * 2;
+    const thumb = this.p.store.thumbAt(pos);
+    if (thumb && thumb.frame.length === frameSize(tw, th)) {
+      scaleFrame(thumb.frame, tw, th, video, w, h, { luma: 0.62, sat: 0.42 });
+    } else {
+      this.held?.copy(video);
+    }
+  }
+
+  private drawGraphics(video: Buffer, out: PhaseOutput): void {
+    const showLive = this.toDelay === 0 && out.center.progress > 0.97;
+    this.p.overlay.drawCenter(video, {
+      kind: this.kind,
+      ...out.center,
+      timecode: showLive ? 'LIVE' : formatDelay(out.delay),
+      label: this.label,
+    });
+    this.p.overlay.drawTimeline(video, { alpha: out.lineAlpha, span: this.span, knob: out.delay });
+  }
+
+  private get label(): string {
+    if (this.kind === 'rewind') return 'REWINDING';
+    return this.toDelay === 0 ? 'BACK TO LIVE' : 'SKIPPING AHEAD';
   }
 
   dispose(): void {

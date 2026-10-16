@@ -10,8 +10,8 @@ export function tapeWhoosh(kind: 'rewind' | 'forward', seconds: number, volume =
   const rand = rng(kind === 'rewind' ? 7 : 11);
   const [f0, f1] = kind === 'rewind' ? [2600, 420] : [420, 2600];
   const gain = 0.32 * volume;
+  // band-pass biquad coefficients (b1 is always 0 for this filter)
   let b0 = 0;
-  let b1 = 0;
   let b2 = 0;
   let a1 = 0;
   let a2 = 0;
@@ -33,13 +33,12 @@ export function tapeWhoosh(kind: 'rewind' | 'forward', seconds: number, volume =
       const alpha = Math.sin(w) / (2 * q);
       const a0 = 1 + alpha;
       b0 = alpha / a0;
-      b1 = 0;
       b2 = -alpha / a0;
       a1 = (-2 * Math.cos(w)) / a0;
       a2 = (1 - alpha) / a0;
     }
     const x = rand() * 2 - 1;
-    const y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2;
+    const y = b0 * x + b2 * x2 - a1 * y1 - a2 * y2;
     x2 = x1;
     x1 = x;
     y2 = y1;
@@ -60,9 +59,10 @@ export function tapeWhoosh(kind: 'rewind' | 'forward', seconds: number, volume =
   return out;
 }
 
+const toInt16 = (v: number) => Math.min(32767, Math.max(-32768, Math.round(v)));
+
 function clamp16(v: number): number {
-  const x = Math.round(v * 32767);
-  return x > 32767 ? 32767 : x < -32768 ? -32768 : x;
+  return toInt16(v * 32767);
 }
 
 /** Mix s16le stereo `src` (from byte offset `srcOff`) into `dst`, with gain applied to dst first. */
@@ -71,6 +71,6 @@ export function mixInto(dst: Buffer, dstGain: number, src: Buffer | null, srcOff
     let v = dst.readInt16LE(i) * dstGain;
     const j = srcOff + i;
     if (src && j < src.length) v += src.readInt16LE(j);
-    dst.writeInt16LE(v > 32767 ? 32767 : v < -32768 ? -32768 : Math.round(v), i);
+    dst.writeInt16LE(toInt16(v), i);
   }
 }

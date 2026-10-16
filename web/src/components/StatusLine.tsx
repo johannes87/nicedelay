@@ -1,10 +1,17 @@
 import type { AppState } from '../api.ts';
 import { clock } from '../format.ts';
 
-interface Props {
+type Props = Readonly<{
   state: AppState | null;
   online: boolean;
   onOpenSettings: () => void;
+}>;
+
+function obsLabel({ connected, info }: AppState['ingest']): string {
+  if (!connected) return 'Waiting for OBS';
+  if (!info) return 'OBS connected';
+  const format = `${info.height}p${Math.round(info.fps)}`;
+  return `OBS connected · ${format}`;
 }
 
 /** One quiet line: is OBS here, where is it going, how much is recorded. */
@@ -34,11 +41,7 @@ export function StatusLine({ state, online, onOpenSettings }: Props) {
 
   return (
     <footer className="status">
-      <Item tone={ingest.connected ? 'good' : 'idle'}>
-        {ingest.connected
-          ? `OBS connected${ingest.info ? ` · ${ingest.info.height}p${Math.round(ingest.info.fps)}` : ''}`
-          : 'Waiting for OBS'}
-      </Item>
+      <Item tone={ingest.connected ? 'good' : 'idle'}>{obsLabel(ingest)}</Item>
       {destination}
       {buffer.recorded > 0 && (
         <Item>
@@ -49,7 +52,7 @@ export function StatusLine({ state, online, onOpenSettings }: Props) {
   );
 }
 
-function Item({ tone, children }: { tone?: 'good' | 'warn' | 'bad' | 'idle'; children: React.ReactNode }) {
+function Item({ tone, children }: Readonly<{ tone?: 'good' | 'warn' | 'bad' | 'idle'; children: React.ReactNode }>) {
   return (
     <span className="status-item">
       {tone && <i className={`status-dot ${tone}`} />}

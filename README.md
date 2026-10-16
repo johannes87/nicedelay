@@ -21,7 +21,7 @@ Open the dashboard at <http://127.0.0.1:8080>, then:
 
 1. **Point OBS at nicedelay**: in OBS, Settings → Stream → Service **Custom**. Paste the server and stream key from nicedelay's settings (by default `rtmp://127.0.0.1:1935/live` and `nicedelay`).
 2. **Check the keyframe interval**: in OBS, Settings → Output. In **Simple** output mode there's nothing to do. In **Advanced** mode, open the **Streaming** tab and set **Keyframe Interval** to 1 or 2 s (the default `0` means "auto" and can be much longer). nicedelay jumps between keyframes, so short intervals make jumps fast and precise.
-3. **Tell nicedelay where to stream**: in nicedelay, Settings → Stream to. Add Twitch, YouTube or any RTMP server with your stream key.
+3. **Tell nicedelay where to stream**: in nicedelay, Settings → Stream to. Add Twitch or YouTube (both connect over encrypted RTMPS) or any RTMP/RTMPS server, with your stream key.
 4. Start streaming in OBS. Press **Space** in the dashboard (or click the button) to delay; press it again to go live.
 
 The dashboard also works as an OBS dock (Docks → Custom Browser Docks).

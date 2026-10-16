@@ -12,7 +12,7 @@ export function useToast() {
   return useMemo(() => ({ message, show }), [message, show]);
 }
 
-export function Toast({ message }: { message: string | null }) {
+export function Toast({ message }: Readonly<{ message: string | null }>) {
   return (
     <div className="toast-region" role="status" aria-live="polite">
       <AnimatePresence>

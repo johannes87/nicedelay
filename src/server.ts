@@ -47,7 +47,8 @@ class App {
     this.playout = new Playout({ config: c, store: this.store, ingest: this.ingest });
     this.ingest.on('connected', () => {
       const info = this.ingest.info;
-      log('green', `OBS connected${info ? ` (${info.codec} ${info.width}x${info.height} ${info.fps}fps)` : ''}`);
+      const details = info ? ` (${info.codec} ${info.width}x${info.height} ${info.fps}fps)` : '';
+      log('green', `OBS connected${details}`);
       this.broadcastState(true);
     });
     this.ingest.on('disconnected', () => {
@@ -201,7 +202,8 @@ class App {
       const dests = c.destinations.filter((d) => d.enabled);
       const host = httpHost === '0.0.0.0' ? 'localhost' : httpHost;
       log('bold', '\n  nicedelay');
-      console.log(`  Dashboard   ${styleText('cyan', `http://${host}:${httpPort}`)}`);
+      const dashboard = `http://${host}:${httpPort}`;
+      console.log(`  Dashboard   ${styleText('cyan', dashboard)}`);
       console.log(
         `  OBS server  ${styleText('cyan', this.ingest.url)}   stream key ${styleText('cyan', c.ingest.key)}`,
       );

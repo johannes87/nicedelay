@@ -144,14 +144,22 @@ export function rng(seed: number): () => number {
   };
 }
 
-// VHS-style tape artifacts: horizontally displaced bands, a rolling noise bar and
-// scanlines. `strength` 0..1, `seed` changes the pattern per frame.
+/**
+ * VHS-style tape artifacts: horizontally displaced bands, a rolling noise bar and
+ * scanlines. `strength` 0..1, `seed` changes the pattern per frame.
+ */
 export function tapeEffect(buf: Buffer, w: number, h: number, strength: number, seed: number, rollPos: number): void {
   if (strength <= 0) return;
   const rand = rng(seed);
+  displaceBands(buf, w, h, strength, rand);
+  trackingNoise(buf, w, h, strength, rand, rollPos);
+  scanlines(buf, w, h, strength);
+}
+
+/** A few horizontal bands of the picture shifted sideways. */
+function displaceBands(buf: Buffer, w: number, h: number, strength: number, rand: () => number): void {
   const { u, v } = planeOffsets(w, h);
   const cw = w / 2;
-  // displaced bands
   const bands = 2 + Math.floor(rand() * 3);
   for (let b = 0; b < bands; b++) {
     const bh = Math.max(2, Math.floor(h * (0.01 + rand() * 0.05)));
@@ -164,7 +172,10 @@ export function tapeEffect(buf: Buffer, w: number, h: number, strength: number, 
       shiftRow(buf, v + y * cw, cw, dx >> 1);
     }
   }
-  // rolling noise bar (tracking noise)
+}
+
+/** A noisy, jittering bar rolling down the picture (`rollPos` 0..1). */
+function trackingNoise(buf: Buffer, w: number, h: number, strength: number, rand: () => number, rollPos: number): void {
   const barH = Math.floor(h * 0.07);
   const barY = Math.floor(rollPos * (h + barH)) - barH;
   const amp = 90 * strength;
@@ -175,18 +186,17 @@ export function tapeEffect(buf: Buffer, w: number, h: number, strength: number, 
     const shift = Math.round((rand() - 0.5) * 16 * strength * edge);
     if (shift) shiftRow(buf, o, w, shift);
     for (let x = 0; x < w; x++, o++) {
-      const n = buf[o] + (rand() - 0.5) * k * 2 + k * 0.3;
-      buf[o] = n < 16 ? 16 : n > 235 ? 235 : n;
+      buf[o] = Math.min(235, Math.max(16, buf[o] + (rand() - 0.5) * k * 2 + k * 0.3));
     }
   }
-  // scanlines: darken every other line pair a little
+}
+
+/** Darken every other line pair a little. */
+function scanlines(buf: Buffer, w: number, h: number, strength: number): void {
   const sl = Math.round(256 - 40 * strength);
   for (let y = 0; y < h; y += 4) {
-    let o = y * w;
-    for (let r = 0; r < 2; r++) {
-      const end = o + w;
-      for (; o < end; o++) buf[o] = (((buf[o] - 16) * sl) >> 8) + 16;
-    }
+    const end = (y + 2) * w;
+    for (let o = y * w; o < end; o++) buf[o] = (((buf[o] - 16) * sl) >> 8) + 16;
   }
 }
 
@@ -195,7 +205,22 @@ function shiftRow(buf: Buffer, off: number, len: number, dx: number): void {
   else buf.copyWithin(off, off - dx, off + len);
 }
 
-// Alpha-blend an RGBA image (non-premultiplied, e.g. canvas getImageData) onto a frame.
+/** The part of an RGBA image that lands on the frame, in image coordinates. */
+interface BlendArea {
+  rgba: Uint8ClampedArray;
+  rw: number;
+  /** frame position of the image's top-left corner (even) */
+  x0: number;
+  y0: number;
+  xa: number;
+  ya: number;
+  xb: number;
+  yb: number;
+  /** opacity, 0..256 */
+  op: number;
+}
+
+/** Alpha-blend an RGBA image (non-premultiplied, e.g. canvas getImageData) onto a frame. */
 export function blendRGBA(
   buf: Buffer,
   w: number,
@@ -203,21 +228,30 @@ export function blendRGBA(
   rgba: Uint8ClampedArray,
   rw: number,
   rh: number,
-  x0: number,
-  y0: number,
+  x: number,
+  y: number,
   opacity = 1,
 ): void {
-  x0 &= ~1;
-  y0 &= ~1;
-  const { u, v } = planeOffsets(w, h);
-  const cw = w / 2;
   const op = Math.round(opacity * 256);
   if (op <= 0) return;
-  const xa = Math.max(0, -x0);
-  const ya = Math.max(0, -y0);
-  const xb = Math.min(rw, w - x0);
-  const yb = Math.min(rh, h - y0);
-  // luma
+  const x0 = x & ~1;
+  const y0 = y & ~1;
+  const area: BlendArea = {
+    rgba,
+    rw,
+    x0,
+    y0,
+    xa: Math.max(0, -x0),
+    ya: Math.max(0, -y0),
+    xb: Math.min(rw, w - x0),
+    yb: Math.min(rh, h - y0),
+    op,
+  };
+  blendLuma(buf, w, area);
+  blendChroma(buf, w, h, area);
+}
+
+function blendLuma(buf: Buffer, w: number, { rgba, rw, x0, y0, xa, ya, xb, yb, op }: BlendArea): void {
   for (let y = ya; y < yb; y++) {
     let si = (y * rw + xa) * 4;
     let di = (y0 + y) * w + x0 + xa;
@@ -229,7 +263,13 @@ export function blendRGBA(
       buf[di] = d + ((((yy - d) * a + 127) / 255) | 0);
     }
   }
-  // chroma (one sample per 2x2 block)
+}
+
+/** One chroma sample per 2x2 block, from the alpha-weighted average colour of the block. */
+function blendChroma(buf: Buffer, w: number, h: number, area: BlendArea): void {
+  const { rgba, rw, x0, y0, xa, ya, xb, yb, op } = area;
+  const { u, v } = planeOffsets(w, h);
+  const cw = w / 2;
   for (let y = ya & ~1; y < yb - 1; y += 2) {
     for (let x = xa & ~1; x < xb - 1; x += 2) {
       let sa = 0;
@@ -249,11 +289,9 @@ export function blendRGBA(
       const g = sg / sa;
       const b = sb / sa;
       const a = (((sa >> 2) * op) >> 8) / 255;
-      const cb = 128 + (-0.1006 * r - 0.3386 * g + 0.4392 * b);
-      const cr = 128 + (0.4392 * r - 0.3989 * g - 0.0403 * b);
       const ci = ((y0 + y) >> 1) * cw + ((x0 + x) >> 1);
-      buf[u + ci] += (cb - buf[u + ci]) * a;
-      buf[v + ci] += (cr - buf[v + ci]) * a;
+      buf[u + ci] += (128 + (-0.1006 * r - 0.3386 * g + 0.4392 * b) - buf[u + ci]) * a;
+      buf[v + ci] += (128 + (0.4392 * r - 0.3989 * g - 0.0403 * b) - buf[v + ci]) * a;
     }
   }
 }

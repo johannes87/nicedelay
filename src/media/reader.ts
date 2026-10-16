@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs/promises';
+import type { Writable } from 'node:stream';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { type Config, errorMessage } from '../config.ts';
 import type { BufferStore, Session } from './buffer.ts';
@@ -109,35 +110,53 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
 
   private async feed(proc: FfmpegProcess): Promise<void> {
     const stdin = writablePipe(proc, 0);
-    const s = this.session;
     const buf = Buffer.allocUnsafe(CHUNK);
-    let index = this.index;
-    while (!this.destroyed) {
-      await using fh = await fs.open(this.store.segmentPath(s, index), 'r').catch(() => null);
-      if (!fh) {
-        // Finished-but-missing means trimmed; otherwise the muxer hasn't opened it yet.
-        if (index < s.completed || s.ended) break;
-        await sleep(30);
-        continue;
-      }
-      let pos = 0;
-      while (!this.destroyed) {
-        // Snapshot before reading: if the segment was already finished, an empty read
-        // really is its end; otherwise keep tailing the growing file.
-        const finished = index < s.completed || s.ended;
-        const { bytesRead } = await fh.read(buf, 0, CHUNK, pos);
-        if (bytesRead > 0) {
-          pos += bytesRead;
-          if (!stdin.write(Buffer.from(buf.subarray(0, bytesRead)))) await drained(stdin);
-          continue;
-        }
-        if (finished) break;
-        await sleep(25);
-      }
-      index++;
-      if (s.ended && index >= s.completed) break;
+    for (let index = this.index; !this.destroyed && !this.isPastEnd(index); index++) {
+      await using fh = await this.openSegment(index);
+      if (!fh) break;
+      await this.tail(fh, index, stdin, buf);
     }
     if (!stdin.destroyed) stdin.end();
+  }
+
+  /** Whether segment `index` is complete on disk (or will never grow again). */
+  private isFinished(index: number): boolean {
+    return index < this.session.completed || this.session.ended;
+  }
+
+  private isPastEnd(index: number): boolean {
+    return this.session.ended && index >= this.session.completed;
+  }
+
+  /** Opens a segment, waiting for the muxer to create it. Null if it was trimmed or will never exist. */
+  private async openSegment(index: number): Promise<fs.FileHandle | null> {
+    const file = this.store.segmentPath(this.session, index);
+    while (!this.destroyed) {
+      const fh = await fs.open(file, 'r').catch(() => null);
+      if (fh) return fh;
+      if (this.isFinished(index)) return null;
+      await sleep(30);
+    }
+    return null;
+  }
+
+  /** Streams one segment into the decoder, following it while it's still being written. */
+  private async tail(fh: fs.FileHandle, index: number, stdin: Writable, buf: Buffer): Promise<void> {
+    let pos = 0;
+    while (!this.destroyed) {
+      // Snapshot before reading: if the segment was already finished, an empty read
+      // really is its end; otherwise more data may still arrive.
+      const finished = this.isFinished(index);
+      const { bytesRead } = await fh.read(buf, 0, CHUNK, pos);
+      if (bytesRead > 0) {
+        pos += bytesRead;
+        if (!stdin.write(Buffer.from(buf.subarray(0, bytesRead)))) await drained(stdin);
+      } else if (finished) {
+        return;
+      } else {
+        await sleep(25);
+      }
+    }
   }
 
   pull(force = false): AVFrame | null {

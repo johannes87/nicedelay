@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import { validate } from '../src/config.ts';
 import { BufferStore } from '../src/media/buffer.ts';
+import { parseStreamInfo } from '../src/media/ingest.ts';
 import { AVQueue, ByteQueue, FrameAssembler } from '../src/media/queues.ts';
 import { formatDelay } from '../src/render/overlay.ts';
 import { crossfade, frameSize, scaleFrame, toneFrame } from '../src/render/yuv.ts';
@@ -145,11 +146,23 @@ describe('BufferStore', () => {
   });
 });
 
+describe('parseStreamInfo', () => {
+  it('reads video and audio details from ffmpeg output', () => {
+    const video =
+      '  Stream #0:0: Video: h264 (High), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 6000 kb/s, 29.97 fps, 1k tbn';
+    const info = parseStreamInfo(video, null);
+    assert.deepEqual(info, { codec: 'h264', width: 1920, height: 1080, fps: 29.97 });
+    const withAudio = parseStreamInfo('  Stream #0:1: Audio: aac (LC), 48000 Hz, stereo, fltp, 160 kb/s', info);
+    assert.equal(withAudio?.audio, 'aac');
+    assert.equal(parseStreamInfo('frame=  100 fps= 30 q=-1.0', info), info);
+  });
+});
+
 describe('validate', () => {
   it('fills defaults and rejects junk', () => {
     const c = validate({
       output: { width: 1919, fps: 29, encoder: 'nope', videoBitrate: '4500' },
-      destinations: [{ url: '  rtmp://x/app ' }, { url: '' }, 'garbage'],
+      destinations: [{ url: '  rtmps://x/app ' }, { url: '' }, 'garbage'],
       ingest: { key: 'a b/c' },
       delaySeconds: 99_999,
       bufferMinutes: 2,
@@ -158,7 +171,7 @@ describe('validate', () => {
     assert.equal(c.output.fps, 30);
     assert.equal(c.output.encoder, 'auto');
     assert.equal(c.output.videoBitrate, 4500);
-    assert.deepEqual(c.destinations, [{ name: '', url: 'rtmp://x/app', key: '', enabled: true }]);
+    assert.deepEqual(c.destinations, [{ name: '', url: 'rtmps://x/app', key: '', enabled: true }]);
     assert.equal(c.ingest.key, 'abc');
     assert.equal(c.delaySeconds, 120);
   });

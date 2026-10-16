@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { type AppState, api, type Config, type Destination } from '../api.ts';
 
 const SERVICES = [
-  { name: 'Twitch', url: 'rtmp://live.twitch.tv/app' },
-  { name: 'YouTube', url: 'rtmp://a.rtmp.youtube.com/live2' },
+  // Secure (RTMPS) ingest, so stream keys never cross the network in clear text.
+  { name: 'Twitch', url: 'rtmps://ingest.global-contribute.live-video.net/app' },
+  { name: 'YouTube', url: 'rtmps://a.rtmps.youtube.com/live2' },
 ] as const;
 
 const RESOLUTIONS = [
@@ -26,12 +27,12 @@ function rowKey(d: Destination): number {
   return k;
 }
 
-interface Props {
+type Props = Readonly<{
   open: boolean;
   state: AppState | null;
   onClose: () => void;
   onSaved: (restartPending: boolean) => void;
-}
+}>;
 
 export function Settings({ open, state, onClose, onSaved }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -117,7 +118,7 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
                     ) : (
                       <input
                         value={d.url}
-                        placeholder="rtmp://server/app"
+                        placeholder="rtmps://server/app"
                         aria-label="Server URL"
                         onChange={(e) => setDest(i, { url: e.target.value })}
                       />
@@ -156,7 +157,7 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
               <button
                 className="pill-button"
                 onClick={() =>
-                  set({ destinations: [...draft.destinations, { name: '', url: 'rtmp://', key: '', enabled: true }] })
+                  set({ destinations: [...draft.destinations, { name: '', url: '', key: '', enabled: true }] })
                 }
               >
                 + Other
@@ -225,7 +226,7 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
   );
 }
 
-function Group({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
+function Group({ title, note, children }: Readonly<{ title: string; note?: string; children: React.ReactNode }>) {
   return (
     <section className="group">
       <h3>{title}</h3>
@@ -235,7 +236,7 @@ function Group({ title, note, children }: { title: string; note?: string; childr
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div className="row">
       <span className="row-label">{label}</span>
@@ -244,7 +245,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function CopyRow({ label, value }: { label: string; value: string }) {
+function CopyRow({ label, value }: Readonly<{ label: string; value: string }>) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="row">
@@ -265,7 +266,11 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+function Switch({
+  checked,
+  onChange,
+  label,
+}: Readonly<{ checked: boolean; onChange: (v: boolean) => void; label: string }>) {
   return (
     <button
       role="switch"
@@ -279,7 +284,11 @@ function Switch({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
-function Choice({ options, value, onChange }: { options: string[]; value: string; onChange: (v: string) => void }) {
+function Choice({
+  options,
+  value,
+  onChange,
+}: Readonly<{ options: string[]; value: string; onChange: (v: string) => void }>) {
   return (
     <div className="choice" role="radiogroup">
       {options.map((o) => (

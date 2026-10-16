@@ -2,11 +2,11 @@ import { motion, useAnimate } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { PREVIEW_LATENCY, type TransitionEvent } from '../api.ts';
 
-interface Props {
+type Props = Readonly<{
   running: boolean;
   mode: string;
   transition: TransitionEvent | null;
-}
+}>;
 
 /** What viewers see: the encoder's own input, including the on-stream animation. */
 export function Preview({ running, mode, transition }: Props) {

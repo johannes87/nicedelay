@@ -17,6 +17,22 @@ interface IngestEvents {
  *   fd 5: small thumbnails at a low rate           -> scrub animation
  *   disk: MPEG-TS segments (stream copy)           -> the rolling buffer
  */
+/**
+ * Picks the input's video/audio details out of ffmpeg's stream listing, e.g.
+ * `Stream #0:0: Video: h264 (High), yuv420p(tv, bt709), 1920x1080, 6000 kb/s, 30 fps, ...`
+ */
+export function parseStreamInfo(line: string, info: IngestInfo | null): IngestInfo | null {
+  if (!line.includes('Stream #0:')) return info;
+  const video = /Video: (\w+)/.exec(line);
+  const size = /\b(\d{2,5})x(\d{2,5})\b/.exec(line);
+  const fps = /\b(\d{1,3}(?:\.\d{1,3})?) fps\b/.exec(line);
+  if (video && size) {
+    return { codec: video[1], width: Number(size[1]), height: Number(size[2]), fps: fps ? Number(fps[1]) : 0 };
+  }
+  const audio = /Audio: (\w+)/.exec(line);
+  return audio && info ? { ...info, audio: audio[1] } : info;
+}
+
 export class Ingest extends EventEmitter<IngestEvents> {
   readonly config: Config;
   readonly store: BufferStore;
@@ -114,8 +130,8 @@ export class Ingest extends EventEmitter<IngestEvents> {
       const lines = listBuf.split('\n');
       listBuf = lines.pop() ?? '';
       for (const line of lines) {
-        const [, start, end] = line.trim().split(',');
-        if (start !== undefined) this.store.addSegment(session, Number(start), Number(end));
+        const fields = line.trim().split(',');
+        if (fields.length >= 3) this.store.addSegment(session, Number(fields[1]), Number(fields[2]));
       }
     });
 
@@ -126,10 +142,7 @@ export class Ingest extends EventEmitter<IngestEvents> {
     pipe(proc, 5).on('data', (d: Buffer) => thumbAsm.push(d));
 
     const stderr = tailStderr(proc, (line) => {
-      const v = line.match(/Stream #0:\d+.*Video: (\w+).*?, (\d{2,5})x(\d{2,5})[^,]*,.*?([\d.]+) fps/);
-      if (v) this.info = { codec: v[1], width: Number(v[2]), height: Number(v[3]), fps: Number(v[4]) };
-      const a = line.match(/Stream #0:\d+.*Audio: (\w+)/);
-      if (a && this.info) this.info.audio = a[1];
+      this.info = parseStreamInfo(line, this.info);
     });
 
     proc.on('close', (code) => {

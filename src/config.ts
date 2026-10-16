@@ -35,8 +35,14 @@ function isObject(v: unknown): v is Json {
 
 const obj = (v: unknown): Json => (isObject(v) ? v : {});
 
+function toNumber(v: unknown): number {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string' && v.trim()) return Number(v);
+  return Number.NaN;
+}
+
 function num(v: unknown, min: number, max: number, dflt: number): number {
-  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v) : Number.NaN;
+  const n = toNumber(v);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : dflt;
 }
 

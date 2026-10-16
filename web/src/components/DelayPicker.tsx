@@ -5,7 +5,10 @@ import { short } from '../format.ts';
 const OPTIONS = [5, 10, 30, 60, 120, 300];
 
 /** Segmented control for how far behind viewers should be. */
-export function DelayPicker({ state, onPick }: { state: AppState | null; onPick: (seconds: number) => void }) {
+export function DelayPicker({
+  state,
+  onPick,
+}: Readonly<{ state: AppState | null; onPick: (seconds: number) => void }>) {
   const capacity = state?.buffer.capacity ?? 600;
   const options = OPTIONS.filter((s) => s <= capacity - 2);
   const delayed = state?.playout.mode === 'delayed';
