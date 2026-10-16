@@ -70,7 +70,7 @@ export function hasEncoder(name: string): boolean {
 }
 
 export function killGently(proc: ChildProcess | null | undefined, ms = 2000): void {
-  if (!proc || proc.exitCode !== null || proc.signalCode) return;
+  if (proc?.exitCode !== null || proc.signalCode) return;
   proc.kill('SIGTERM');
   setTimeout(() => {
     if (proc.exitCode === null) proc.kill('SIGKILL');

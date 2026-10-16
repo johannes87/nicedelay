@@ -22,7 +22,8 @@
       {
         "allow": ["**/*.css"]
       }
-    ]
+    ],
+    "typescript/prefer-optional-chain": "error"
   },
   "ignorePatterns": ["dist", "node_modules"],
   "overrides": [
