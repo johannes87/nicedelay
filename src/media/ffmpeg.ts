@@ -66,7 +66,7 @@ export function hasEncoder(name: string): boolean {
       encoderList = '';
     }
   }
-  return new RegExp(`\\s${name}\\s`).test(encoderList);
+  return new RegExp(String.raw`\s${name}\s`).test(encoderList);
 }
 
 export function killGently(proc: ChildProcess | null | undefined, ms = 2000): void {
