@@ -2,6 +2,8 @@
 
 Stream delay for OBS that starts **instantly**.
 
+> **Status: prototype.** nicedelay works, but it's early. It's developed and tested on macOS only; Windows and Linux are untested. Expect rough edges, and don't rely on it for an important stream yet.
+
 nicedelay sits between OBS and Twitch/YouTube and keeps recording the last few minutes of your stream. Because it's always recording, turning a delay on doesn't make viewers wait while a buffer fills: the stream jumps back right away, with a rewind animation and sound so viewers know what happened. A badge in the corner always tells viewers where they are: "LIVE", or "10s delay" while the delay is on. Drag it in the dashboard's preview to move it. Going live again fast-forwards to the present the same way.
 
 ## Requirements
@@ -53,6 +55,16 @@ OBS ──RTMP──▶ ingest (ffmpeg) ──┬─ rolling buffer: MPEG-TS seg
 - When you stop streaming in OBS, viewers still see any delayed footage, then the stream ends. If OBS drops out instead (a crash or lost connection), nicedelay keeps the stream up for 15 seconds, showing "RECONNECTING", so a restarted OBS can continue the same stream.
 
 Config lives in `config.json` (created on first save). Changes to quality or the OBS connection apply when the stream ends.
+
+## Performance
+
+nicedelay re-encodes your stream: the badge and rewind animations are drawn into the picture, so it decodes what OBS sends and encodes it again. That's a second encode on top of OBS's own, plus another decode while the delay is on.
+
+- **macOS** encodes on the GPU (VideoToolbox), so it costs little.
+- **Windows and Linux** currently encode on the CPU (x264). At 1080p60 that takes several cores, which can lower your fps in CPU-heavy games.
+- Decoding currently runs on the CPU on all platforms.
+
+For demanding games, run nicedelay on a second machine: it's just a hop between OBS and Twitch, so any computer on your network works. By default it only accepts connections from the same computer; set `ingest.host` and `httpHost` to `0.0.0.0` in `config.json` so OBS and your browser can reach it. The dashboard has no login, so only do this on a network you trust. Hardware encoding on Windows and Linux is planned.
 
 ## Development
 
