@@ -15,6 +15,7 @@ import {
   tailStderr,
   writablePipe,
 } from './ffmpeg.ts';
+import { frameBytes } from '../render/yuv.ts';
 import { type AVFrame, AVQueue, FrameAssembler } from './queues.ts';
 
 const CHUNK = 512 * 1024;
@@ -85,7 +86,7 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
       ['pipe:3'],
     ].flat();
     const proc = spawnFfmpeg(args, { fds: 4, stdin: 'pipe' });
-    const asm = new FrameAssembler((w * h * 3) / 2, (f) => {
+    const asm = new FrameAssembler(frameBytes(w, h), (f) => {
       this.queue.pushVideo(f);
       if (this.queue.length >= this.maxQueue && !this.paused) {
         this.paused = true;

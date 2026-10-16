@@ -7,7 +7,7 @@ import type { AVFrame } from './media/queues.ts';
 import { BufferReader } from './media/reader.ts';
 import { formatDelay, Overlay, type PillParams } from './render/overlay.ts';
 import { mixInto, tapeWhoosh } from './render/sfx.ts';
-import { crossfade, frameSize, scaleFrame, tapeEffect, toneFrame } from './render/yuv.ts';
+import { crossfade, frameBytes, scaleFrame, tapeEffect, toneFrame } from './render/yuv.ts';
 import type { CommandResult, Config, Mode, PlayoutState, TransitionEvent, TransitionKind } from './types.ts';
 
 export type { CommandResult, Mode, PlayoutState, TransitionEvent } from './types.ts';
@@ -82,7 +82,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     this.w = width;
     this.h = height;
     this.fps = fps;
-    this.frameBytes = frameSize(width, height);
+    this.frameBytes = frameBytes(width, height);
     this.audioBytes = (48_000 / fps) * 4;
     this.liveTarget = Math.max(2, Math.round(fps * 0.1));
     this.liveMax = Math.max(6, Math.round(fps * 0.3));
@@ -475,7 +475,7 @@ class Transition {
     this.fps = playout.fps;
     this.thumbW = Math.round(playout.w / 10) * 2;
     this.thumbH = Math.round(playout.h / 10) * 2;
-    this.thumbBytes = frameSize(this.thumbW, this.thumbH);
+    this.thumbBytes = frameBytes(this.thumbW, this.thumbH);
 
     const store = playout.store;
     const L0 = store.liveEdge;

@@ -8,7 +8,7 @@ import { BufferStore } from '../src/media/buffer.ts';
 import { parseStreamInfo } from '../src/media/ingest.ts';
 import { AVQueue, ByteQueue, FrameAssembler } from '../src/media/queues.ts';
 import { formatDelay } from '../src/render/overlay.ts';
-import { crossfade, frameSize, scaleFrame, toneFrame } from '../src/render/yuv.ts';
+import { crossfade, frameBytes, scaleFrame, toneFrame } from '../src/render/yuv.ts';
 
 const FPS = 30;
 const BPF = (48_000 / FPS) * 4; // audio bytes per video frame
@@ -185,9 +185,9 @@ describe('render helpers', () => {
   });
 
   it('scales, tones and crossfades yuv frames', () => {
-    const src = Buffer.alloc(frameSize(4, 4), 128);
+    const src = Buffer.alloc(frameBytes(4, 4), 128);
     src.fill(200, 0, 16);
-    const big = Buffer.alloc(frameSize(8, 8));
+    const big = Buffer.alloc(frameBytes(8, 8));
     scaleFrame(src, 4, 4, big, 8, 8);
     assert.equal(big[0], 200);
     assert.equal(big[64], 128);

@@ -1,7 +1,8 @@
 // In-place pixel work on yuv420p frames (BT.709, limited range). Every function writes
 // into a caller-provided destination so source frames are never mutated.
 
-export function frameSize(w: number, h: number): number {
+/** Bytes in one raw yuv420p frame: a full-size luma plane plus two quarter-size chroma planes. */
+export function frameBytes(w: number, h: number): number {
   return (w * h * 3) / 2;
 }
 
@@ -107,7 +108,7 @@ export function toneFrame(src: Buffer, dst: Buffer, w: number, h: number, tone: 
   const { ys, cs: csize } = planeOffsets(w, h);
   const { ly, ay, cs, ac } = toneCoeffs(tone);
   if (ly === 256 && cs === 256) {
-    src.copy(dst, 0, 0, frameSize(w, h));
+    src.copy(dst, 0, 0, frameBytes(w, h));
     return;
   }
   for (let i = 0; i < ys; i++) dst[i] = (src[i] * ly + ay + 128) >> 8;

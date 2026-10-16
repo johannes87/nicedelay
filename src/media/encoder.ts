@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { Writable } from 'node:stream';
 import type { Config, Destination, EncoderChoice } from '../config.ts';
+import { frameBytes } from '../render/yuv.ts';
 import { type FfmpegProcess, hasEncoder, killGently, pipe, spawnFfmpeg, tailStderr, writablePipe } from './ffmpeg.ts';
 
 const PREVIEW_WIDTH = 640;
@@ -35,7 +36,7 @@ interface EncoderEvents {
  */
 export class Encoder extends EventEmitter<EncoderEvents> {
   readonly config: Config;
-  readonly frameSize: number;
+  readonly frameBytes: number;
   readonly destinations: Destination[];
   readonly codec: Exclude<EncoderChoice, 'auto'>;
   dropped = 0;
@@ -52,7 +53,7 @@ export class Encoder extends EventEmitter<EncoderEvents> {
     super();
     this.config = config;
     const { width, height } = config.output;
-    this.frameSize = (width * height * 3) / 2;
+    this.frameBytes = frameBytes(width, height);
     this.destinations = config.destinations.filter((d) => d.enabled);
     this.codec = pickEncoder(config.output.encoder);
   }
@@ -147,7 +148,7 @@ export class Encoder extends EventEmitter<EncoderEvents> {
     if (!this.running || !this.video || !this.audio) return;
     // If the encoder can't keep up, drop whole frames (with their audio) rather than
     // buffering without bound.
-    if (this.video.writableLength > this.frameSize * 4) {
+    if (this.video.writableLength > this.frameBytes * 4) {
       this.dropped++;
       return;
     }

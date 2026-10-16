@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import type { Config, IngestInfo } from '../types.ts';
 import type { BufferStore, Session } from './buffer.ts';
 import { AUDIO_CHAIN, type FfmpegProcess, killGently, pipe, scaleChain, spawnFfmpeg, tailStderr } from './ffmpeg.ts';
+import { frameBytes } from '../render/yuv.ts';
 import { AVQueue, FrameAssembler } from './queues.ts';
 
 interface IngestEvents {
@@ -111,7 +112,7 @@ export class Ingest extends EventEmitter<IngestEvents> {
       this.emit('connected', session);
     };
 
-    const video = new FrameAssembler((w * h * 3) / 2, (frame) => {
+    const video = new FrameAssembler(frameBytes(w, h), (frame) => {
       onFirstData();
       session.liveFrames++;
       live.pushVideo(frame);
@@ -135,7 +136,7 @@ export class Ingest extends EventEmitter<IngestEvents> {
       }
     });
 
-    const thumbAsm = new FrameAssembler((tw * th * 3) / 2, (frame) => {
+    const thumbAsm = new FrameAssembler(frameBytes(tw, th), (frame) => {
       this.store.addThumb(session.base + thumbs / rate, frame);
       thumbs++;
     });

@@ -54,13 +54,13 @@ export class ByteQueue {
 
 /** Cuts a raw byte stream into fixed-size frames. */
 export class FrameAssembler {
-  readonly frameSize: number;
+  readonly frameBytes: number;
   private readonly onFrame: (frame: Buffer) => void;
   private cur: Buffer | null = null;
   private pos = 0;
 
-  constructor(frameSize: number, onFrame: (frame: Buffer) => void) {
-    this.frameSize = frameSize;
+  constructor(frameBytes: number, onFrame: (frame: Buffer) => void) {
+    this.frameBytes = frameBytes;
     this.onFrame = onFrame;
   }
 
@@ -68,14 +68,14 @@ export class FrameAssembler {
     let off = 0;
     while (off < chunk.length) {
       if (!this.cur) {
-        this.cur = Buffer.allocUnsafe(this.frameSize);
+        this.cur = Buffer.allocUnsafe(this.frameBytes);
         this.pos = 0;
       }
-      const n = Math.min(this.frameSize - this.pos, chunk.length - off);
+      const n = Math.min(this.frameBytes - this.pos, chunk.length - off);
       chunk.copy(this.cur, this.pos, off, off + n);
       this.pos += n;
       off += n;
-      if (this.pos === this.frameSize) {
+      if (this.pos === this.frameBytes) {
         const frame = this.cur;
         this.cur = null;
         this.onFrame(frame);
