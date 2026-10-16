@@ -15,6 +15,7 @@ export type { CommandResult, Mode, PlayoutState, TransitionEvent } from './types
 const PILL_HOLD = 3; // seconds the corner pill stays after a transition
 const PILL_FADE = 0.6;
 const READY_TIMEOUT = 3; // max seconds to wait for a reader at landing
+const MAX_DRAW_FPS = 30; // transition animation frame rate cap (keeps 60 fps output within budget)
 
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
@@ -233,10 +234,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     if (this.ingest.live && !this.wantsLive()) this.ingest.live.trimTo(this.liveTarget);
 
     let out: AVFrame | null;
-    let fresh = false; // whether out.video is a buffer we own and may draw on
     if (this.transition) {
-      out = this.transition.render();
-      fresh = true;
+      out = this.transition.render(); // may repeat the previous frame: not ours to draw on
       if (this.transition.done) this.finishTransition();
     } else {
       out = this.pullSource();
@@ -249,16 +248,14 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       this.underruns++;
       this.checkStarved();
       out = { video: this.standbyFrame(), audio: Buffer.alloc(this.audioBytes) };
-      fresh = false;
     }
 
     const pill = this.currentPill();
     if (pill) {
-      if (!fresh) {
-        const copy = Buffer.allocUnsafe(this.frameBytes);
-        out.video.copy(copy);
-        out.video = copy;
-      }
+      // Source and transition frames are shared (repeated, cached), so draw on a copy.
+      const copy = Buffer.allocUnsafe(this.frameBytes);
+      out.video.copy(copy);
+      out.video = copy;
       this.overlay.drawPill(out.video, pill);
     }
 
@@ -279,8 +276,11 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       if (q.length < this.liveTarget) return null;
       this.liveRebuffer = false;
     }
-    // Drift: if the feed runs ahead of our clock, drop single frames to stay near the edge.
-    if (q.length > this.liveMax) q.trimTo(q.length - 1);
+    // A backlog (e.g. after the machine stalled) is skipped in one jump: playing through
+    // it faster would be visible. Small drift (the feed's clock slightly ahead of ours)
+    // is absorbed by dropping single frames.
+    if (q.length > this.liveMax * 2) q.trimTo(this.liveTarget);
+    else if (q.length > this.liveMax) q.trimTo(q.length - 1);
     return q.pull(q.length > this.liveMax);
   }
 
@@ -462,6 +462,10 @@ class Transition {
   private readonly thumbBytes: number;
   private i = 0;
   private waited = 0;
+  /** Animation frames are drawn at most this often; in between the last one repeats. */
+  private readonly drawEvery: number;
+  private drawn: Buffer | null = null;
+  private scaledThumb: { from: Buffer; frame: Buffer } | null = null;
   private held: Buffer | null = null;
   private lastScrub: Buffer | null = null;
   private incoming: Buffer | null = null;
@@ -473,6 +477,7 @@ class Transition {
     this.kind = toDelay > fromDelay ? 'rewind' : 'forward';
     this.B = Math.min(1.35, 0.7 + 0.25 * Math.log10(1 + Math.abs(toDelay - fromDelay) / 5));
     this.fps = playout.fps;
+    this.drawEvery = Math.max(1, Math.round(playout.fps / MAX_DRAW_FPS));
     this.thumbW = Math.round(playout.w / 10) * 2;
     this.thumbH = Math.round(playout.h / 10) * 2;
     this.thumbBytes = frameBytes(this.thumbW, this.thumbH);
@@ -513,16 +518,20 @@ class Transition {
   render(): AVFrame {
     const t = this.i / this.fps;
     const audioOff = this.i * this.p.audioBytes;
+    // Sources and audio advance every frame; the picture is redrawn only every few frames.
+    const video = this.i % this.drawEvery === 0 || !this.drawn ? Buffer.allocUnsafe(this.p.frameBytes) : null;
     this.i++;
-    const video = Buffer.allocUnsafe(this.p.frameBytes);
     let out: PhaseOutput;
     if (t < this.A) out = this.intro(video, t);
     else if (this.scrubbing(t)) out = this.scrub(video, t);
     else out = this.land(video, t);
-    this.drawGraphics(video, out);
+    if (video) {
+      this.drawGraphics(video, out);
+      this.drawn = video;
+    }
     const audio = out.audio ?? Buffer.alloc(this.p.audioBytes);
     if (this.sfx) mixInto(audio, 1, this.sfx, audioOff);
-    return { video, audio };
+    return { video: video ?? this.drawn ?? this.p.standbyFrame(), audio };
   }
 
   /** Scrub until its time is up — and hold there while the target decoder warms up. */
@@ -531,7 +540,7 @@ class Transition {
   }
 
   /** A: keep the old picture moving while it dims. */
-  private intro(video: Buffer, t: number): PhaseOutput {
+  private intro(video: Buffer | null, t: number): PhaseOutput {
     const p = this.p;
     const e = easeOut(t / this.A);
     const src = this.old ? p.pullFrom(this.old, 'none') : null;
@@ -539,28 +548,35 @@ class Transition {
       p.lastFrame = src.video;
       mixInto(src.audio, 1 - e, null, 0);
     }
-    toneFrame(src?.video ?? p.lastFrame ?? p.standbyFrame(), video, p.w, p.h, { luma: 1 - 0.4 * e, sat: 1 - 0.55 * e });
-    tapeEffect(video, p.w, p.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
-    this.held = video;
+    if (video) {
+      toneFrame(src?.video ?? p.lastFrame ?? p.standbyFrame(), video, p.w, p.h, {
+        luma: 1 - 0.4 * e,
+        sat: 1 - 0.55 * e,
+      });
+      tapeEffect(video, p.w, p.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
+      this.held = video;
+    }
     const center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / this.A), progress: 0 };
     return { audio: src?.audio ?? null, center, delay: this.fromDelay, lineAlpha: e };
   }
 
   /** B: race through thumbnails from the old position to the new one. */
-  private scrub(video: Buffer, t: number): PhaseOutput {
+  private scrub(video: Buffer | null, t: number): PhaseOutput {
     const p = this.p;
     if (t >= this.A + this.B) this.waited++;
     this.releaseOld();
     const u = easeInOut(clamp01((t - this.A) / this.B));
-    this.drawThumb(video, this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
-    tapeEffect(video, p.w, p.h, 0.95, this.i * 7919, (t * 1.9) % 1);
-    this.lastScrub = video;
+    if (video) {
+      this.drawThumb(video, this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
+      tapeEffect(video, p.w, p.h, 0.95, this.i * 7919, (t * 1.9) % 1);
+      this.lastScrub = video;
+    }
     const center = { alpha: 1, pop: 1 + 0.03 * Math.sin(t * 18), progress: u };
     return { audio: null, center, delay: this.fromDelay + (this.toDelay - this.fromDelay) * u, lineAlpha: 1 };
   }
 
   /** C: crossfade into the new source while the graphics fade out. */
-  private land(video: Buffer, t: number): PhaseOutput {
+  private land(video: Buffer | null, t: number): PhaseOutput {
     const p = this.p;
     const e = easeOut(clamp01((t - this.A - this.B - this.waited / this.fps) / this.C));
     const src = p.pullFrom(this.target, 'fast');
@@ -569,10 +585,10 @@ class Transition {
       mixInto(src.audio, e, null, 0);
     }
     const from = this.lastScrub ?? this.held ?? p.standbyFrame();
-    if (this.incoming) {
+    if (video && this.incoming) {
       crossfade(from, this.incoming, video, e);
       tapeEffect(video, p.w, p.h, 0.6 * (1 - e), this.i * 7919, (t * 1.9) % 1);
-    } else {
+    } else if (video) {
       from.copy(video);
     }
     if (e >= 1) this.done = true;
@@ -592,7 +608,13 @@ class Transition {
     const { w, h } = this.p;
     const thumb = this.p.store.thumbAt(pos);
     if (thumb?.frame.length === this.thumbBytes) {
-      scaleFrame(thumb.frame, this.thumbW, this.thumbH, video, w, h, { luma: 0.62, sat: 0.42 });
+      // Upscaling is the expensive part, and consecutive frames often show the same thumbnail.
+      if (this.scaledThumb?.from !== thumb.frame) {
+        const frame = Buffer.allocUnsafe(this.p.frameBytes);
+        scaleFrame(thumb.frame, this.thumbW, this.thumbH, frame, w, h, { luma: 0.62, sat: 0.42 });
+        this.scaledThumb = { from: thumb.frame, frame };
+      }
+      this.scaledThumb.frame.copy(video);
     } else {
       this.held?.copy(video);
     }

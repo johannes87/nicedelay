@@ -39,6 +39,7 @@ export class Encoder extends EventEmitter<EncoderEvents> {
   readonly frameBytes: number;
   readonly destinations: Destination[];
   readonly codec: Exclude<EncoderChoice, 'auto'>;
+  private readonly maxQueued: number;
   dropped = 0;
   written = 0;
   running = false;
@@ -56,6 +57,7 @@ export class Encoder extends EventEmitter<EncoderEvents> {
     this.frameBytes = frameBytes(width, height);
     this.destinations = config.destinations.filter((d) => d.enabled);
     this.codec = pickEncoder(config.output.encoder);
+    this.maxQueued = Math.max(4, Math.round(config.output.fps / 4));
   }
 
   args(): string[] {
@@ -146,9 +148,9 @@ export class Encoder extends EventEmitter<EncoderEvents> {
 
   write(frame: Buffer, audio: Buffer): void {
     if (!this.running || !this.video || !this.audio) return;
-    // If the encoder can't keep up, drop whole frames (with their audio) rather than
-    // buffering without bound.
-    if (this.video.writableLength > this.frameBytes * 4) {
+    // Short hiccups (up to a quarter second of frames) are absorbed. If the encoder really
+    // can't keep up, drop whole frames (with their audio) rather than buffering without bound.
+    if (this.video.writableLength > this.frameBytes * this.maxQueued) {
       this.dropped++;
       return;
     }
