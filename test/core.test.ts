@@ -229,6 +229,7 @@ describe('validate', () => {
       ingest: { key: 'a b/c' },
       delaySeconds: 99_999,
       bufferMinutes: 2,
+      badge: { x: 1.5, y: 'top' },
     });
     assert.equal(c.output.width, 1920);
     assert.equal(c.output.fps, 30);
@@ -239,6 +240,7 @@ describe('validate', () => {
     ]);
     assert.equal(c.ingest.key, 'abc');
     assert.equal(c.delaySeconds, 120);
+    assert.deepEqual(c.badge, { x: 1, y: 0 });
   });
 });
 

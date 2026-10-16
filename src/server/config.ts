@@ -25,6 +25,7 @@ export const DEFAULTS: Config = {
   bufferMinutes: 10,
   delaySeconds: 10,
   transition: { sound: true, soundVolume: 0.6 },
+  badge: { x: 0, y: 0 },
   reconnectGraceSeconds: 15,
 };
 
@@ -64,6 +65,7 @@ export function validate(input: unknown): Config {
   const ingest = obj(c.ingest);
   const output = obj(c.output);
   const transition = obj(c.transition);
+  const badge = obj(c.badge);
   const fps = num(output.fps, 1, 240, d.output.fps);
   const bufferMinutes = num(c.bufferMinutes, 1, 60, d.bufferMinutes);
   const key = str(ingest.key).replaceAll(/[^\w.-]/g, '');
@@ -109,6 +111,10 @@ export function validate(input: unknown): Config {
     transition: {
       sound: bool(transition.sound, d.transition.sound),
       soundVolume: num(transition.soundVolume, 0, 1, d.transition.soundVolume),
+    },
+    badge: {
+      x: num(badge.x, 0, 1, d.badge.x),
+      y: num(badge.y, 0, 1, d.badge.y),
     },
     reconnectGraceSeconds: num(
       c.reconnectGraceSeconds,

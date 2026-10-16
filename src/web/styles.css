@@ -175,6 +175,8 @@ button:disabled {
 /* ------------------------------------------------------------ preview */
 
 .preview {
+  position: relative;
+  container-type: size;
   aspect-ratio: 16 / 9;
   border-radius: 18px;
   overflow: hidden;
@@ -196,6 +198,83 @@ button:disabled {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* The output picture inside the preview (letterboxed like the img). */
+.badge-area {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: min(100cqw, 100cqh * var(--ar));
+  height: min(100cqh, 100cqw / var(--ar));
+  container-type: size;
+  pointer-events: none;
+}
+
+/* Mirrors the on-stream badge (Overlay.drawPill), in units of 1/1080 of the output height. */
+.badge-handle {
+  --u: calc(100cqh / 1080);
+  --m: calc(36 * var(--u));
+  position: absolute;
+  left: calc(var(--m) + var(--x) * (100cqw - 2 * var(--m)));
+  top: calc(var(--m) + var(--y) * (100cqh - 2 * var(--m)));
+  translate: calc(var(--x) * -100%) calc(var(--y) * -100%);
+  display: flex;
+  align-items: center;
+  height: calc(44 * var(--u));
+  padding: 0 calc(16 * var(--u));
+  border: max(1px, calc(2 * var(--u))) dashed rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  background: rgba(12, 12, 16, 0.45);
+  color: #fff;
+  font:
+    600 calc(22 * var(--u)) / 1 'Helvetica Neue',
+    Helvetica,
+    Arial,
+    sans-serif;
+  letter-spacing: calc(1 * var(--u));
+  white-space: nowrap;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  pointer-events: auto;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+/* A bigger grab area than the (small) badge itself. */
+.badge-handle::before {
+  content: '';
+  position: absolute;
+  inset: -10px;
+}
+
+.preview:hover .badge-handle,
+.badge-handle.dragging {
+  opacity: 1;
+}
+
+.badge-handle.dragging {
+  cursor: grabbing;
+}
+
+/* The red dot of the LIVE badge. */
+.badge-dot {
+  width: calc(14 * var(--u));
+  height: calc(14 * var(--u));
+  margin: 0 calc(14 * var(--u)) 0 calc(1 * var(--u));
+  border-radius: 50%;
+  background: #ff453a;
+}
+
+/* While streaming the real badge is in the picture: only outline it. */
+.on-air .badge-handle:not(.dragging) {
+  background: none;
+  color: transparent;
+}
+
+.on-air .badge-handle:not(.dragging) .badge-dot {
+  visibility: hidden;
 }
 
 .preview-empty {

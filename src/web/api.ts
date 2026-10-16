@@ -9,6 +9,7 @@ import type {
 
 export type {
   AppState,
+  BadgePosition,
   Config,
   Destination,
   TransitionEvent,

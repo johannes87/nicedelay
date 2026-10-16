@@ -35,7 +35,7 @@ export type {
   TransitionEvent,
 } from '../shared/types.ts';
 
-const PILL_HOLD = 3; // seconds the corner pill is highlighted after a transition (LIVE then disappears)
+const PILL_HOLD = 3; // seconds the corner pill is highlighted after a transition
 const PILL_FADE = 0.6;
 const READY_TIMEOUT = 3; // max seconds to wait for a reader at landing
 const MAX_DRAW_FPS = 30; // transition animation frame rate cap (keeps 60 fps output within budget)
@@ -304,7 +304,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       const copy = Buffer.allocUnsafe(this.frameBytes);
       out.video.copy(copy);
       out.video = copy;
-      this.overlay.drawPill(out.video, pill);
+      this.overlay.drawPill(out.video, pill, this.config.badge);
     }
 
     this.encoder?.write(out.video, out.audio);
@@ -401,8 +401,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       return { kind: 'live', text: 'RECONNECTING', alpha: 0.95 };
     }
     if (this.transition) return null;
-    // While delayed, viewers always see that they are watching the past.
-    let alpha = this.mode === 'delayed' ? 0.8 : 0;
+    // Viewers always see whether they are watching live or the past.
+    let alpha = this.mode === 'idle' ? 0 : 0.8;
     if (this.pill) {
       const age = (this.ticks - this.pill.start) / this.fps;
       if (age > PILL_HOLD + PILL_FADE) this.pill = null;
@@ -499,6 +499,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
           }
         : null,
       output: {
+        width: this.w,
+        height: this.h,
         running: !!enc?.running,
         codec: enc?.codec ?? null,
         destinations: enc ? enc.destinations.map((d) => d.name || d.url) : [],

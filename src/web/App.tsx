@@ -12,7 +12,7 @@ import { Preview } from './components/Preview.tsx';
 import { Settings } from './components/Settings.tsx';
 import { StatusLine } from './components/StatusLine.tsx';
 import { Toast, useToast } from './components/Toast.tsx';
-import { clock } from './format.ts';
+import { badgeDuration, clock } from './format.ts';
 
 /** Same curve as the on-stream scrub (cubic ease-in-out), so both move in lockstep. */
 const SCRUB_EASE = [0.65, 0, 0.35, 1] as const;
@@ -125,6 +125,11 @@ export function App() {
           running={!!state?.playout.output.running}
           mode={mode}
           transition={transition}
+          size={state?.playout.output ?? { width: 16, height: 9 }}
+          badge={state?.badge ?? { x: 0, y: 0 }}
+          badgeText={
+            mode === 'delayed' ? `${badgeDuration(delay)} delay` : 'LIVE'
+          }
         />
         <section className="controls">
           <Hero

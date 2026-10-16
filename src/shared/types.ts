@@ -32,7 +32,14 @@ export interface Config {
     sound: boolean;
     soundVolume: number;
   };
+  badge: BadgePosition;
   reconnectGraceSeconds: number;
+}
+
+/** Where the on-stream badge sits: 0..1 across the room it has to move, so 0,0 is top left and 1,1 bottom right. */
+export interface BadgePosition {
+  x: number;
+  y: number;
 }
 
 export type TransitionKind = 'rewind' | 'forward';
@@ -75,6 +82,8 @@ export interface PlayoutState {
     progress: number;
   } | null;
   output: {
+    width: number;
+    height: number;
     running: boolean;
     codec: string | null;
     destinations: string[];
@@ -96,6 +105,7 @@ export interface AppState {
   buffer: { recorded: number; capacity: number };
   playout: PlayoutState;
   delaySeconds: number;
+  badge: BadgePosition;
   restartPending: boolean;
 }
 

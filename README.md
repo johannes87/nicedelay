@@ -2,7 +2,7 @@
 
 Stream delay for OBS that starts **instantly**.
 
-nicedelay sits between OBS and Twitch/YouTube and keeps recording the last few minutes of your stream. Because it's always recording, turning a delay on doesn't make viewers wait while a buffer fills: the stream jumps back right away, with a rewind animation and sound so viewers know what happened. While the delay is on, a badge in the corner ("10s delay") reminds them they're watching the past. Going live again fast-forwards to the present the same way.
+nicedelay sits between OBS and Twitch/YouTube and keeps recording the last few minutes of your stream. Because it's always recording, turning a delay on doesn't make viewers wait while a buffer fills: the stream jumps back right away, with a rewind animation and sound so viewers know what happened. A badge in the corner always tells viewers where they are: "LIVE", or "10s delay" while the delay is on. Drag it in the dashboard's preview to move it. Going live again fast-forwards to the present the same way.
 
 ## Requirements
 

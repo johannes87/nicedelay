@@ -141,6 +141,7 @@ class App {
       },
       playout: this.playout.state(),
       delaySeconds: c.delaySeconds,
+      badge: c.badge,
       restartPending: !!this.pending,
     };
   }

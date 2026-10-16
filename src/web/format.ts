@@ -16,6 +16,12 @@ export function short(seconds: number): string {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
+/** 5s, 90s, 2m: as the on-stream badge shows the delay */
+export function badgeDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return s && s % 60 === 0 ? `${s / 60}m` : `${s}s`;
+}
+
 const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? '' : 's'}`;
 
 /** "10 seconds", "1 minute", "2 minutes 30 seconds" */

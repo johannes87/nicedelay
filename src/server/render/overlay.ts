@@ -1,5 +1,5 @@
 import { type Canvas, createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
-import type { TransitionKind } from '../../shared/types.ts';
+import type { BadgePosition, TransitionKind } from '../../shared/types.ts';
 import { blendRGBA } from './yuv.ts';
 
 export const COLORS = {
@@ -228,8 +228,8 @@ export class Overlay {
     );
   }
 
-  /** Corner status pill. */
-  drawPill(frame: Buffer, p: PillParams): void {
+  /** Status badge, at `pos` within a margin around the frame. */
+  drawPill(frame: Buffer, p: PillParams, pos: BadgePosition): void {
     if (p.alpha <= 0.01) return;
     const { ctx, h } = this.pill;
     const s = this.s;
@@ -243,6 +243,7 @@ export class Overlay {
     const pw = Math.min(this.pill.w - 4 * s, pad * 2 + iconW + textW);
     const ph = 44 * s;
     const py = (h - ph) / 2;
+    const margin = 36 * s;
 
     ctx.fillStyle = 'rgba(12,12,16,0.55)';
     roundRect(ctx, 2 * s, py, pw, ph, ph / 2);
@@ -271,8 +272,8 @@ export class Overlay {
       frame,
       this,
       this.pill,
-      Math.round(32 * s),
-      Math.round(28 * s),
+      Math.round(margin + pos.x * (this.w - 2 * margin - pw) - 2 * s),
+      Math.round(margin + pos.y * (this.h - 2 * margin - ph) - py),
       p.alpha,
       Math.ceil(pw + 6 * s),
     );
