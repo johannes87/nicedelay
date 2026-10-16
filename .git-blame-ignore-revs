@@ -1,0 +1,5 @@
+# Formatting-only commits, skipped by git blame.
+# Locally: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Format with a line length of 80
+36dd4767e54cdeda177fdb538f51ada3e7ced900
