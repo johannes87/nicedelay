@@ -246,7 +246,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       this.lastFrame = out.video;
     } else {
       this.underruns++;
-      this.checkStarved();
+      if (this.checkStarved()) return;
       out = { video: this.standbyFrame(), audio: Buffer.alloc(this.audioBytes) };
     }
 
@@ -368,17 +368,22 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   }
 
   /**
-   * A momentary underrun just repeats the last frame. Only once OBS is gone and the
-   * buffer has played out do we show standby and, after the grace period, end the stream.
+   * A momentary underrun just repeats the last frame. Once OBS is gone and the buffer has
+   * played out, the stream ends: right away if OBS stopped streaming on purpose, otherwise
+   * after the grace period (showing standby), in case OBS reconnects. Returns true if the
+   * output was stopped.
    */
-  private checkStarved(): void {
-    if (this.ingest.connected) return;
+  private checkStarved(): boolean {
+    if (this.ingest.connected) return false;
     const now = this.ticks / this.fps;
     this.starvedSince ??= now;
-    if (now - this.starvedSince > this.config.reconnectGraceSeconds) {
-      console.log('[playout] source gone, ending output');
-      this.stopOutput();
-    }
+    const grace = this.ingest.endedByObs ? 0 : this.config.reconnectGraceSeconds;
+    if (now - this.starvedSince < grace) return false;
+    console.log(
+      this.ingest.endedByObs ? '[playout] OBS stopped streaming, ending output' : '[playout] OBS gone, ending output',
+    );
+    this.stopOutput();
+    return true;
   }
 
   private housekeeping(): void {

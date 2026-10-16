@@ -52,7 +52,10 @@ class App {
       this.broadcastState(true);
     });
     this.ingest.on('disconnected', () => {
-      log('yellow', 'OBS disconnected');
+      log(
+        'yellow',
+        this.ingest.endedByObs ? 'OBS stopped streaming' : 'OBS disconnected (waiting for it to reconnect)',
+      );
       this.broadcastState(true);
     });
     this.playout.on('preview', (jpeg) => this.sendPreview(jpeg));

@@ -50,7 +50,7 @@ OBS ──RTMP──▶ ingest (ffmpeg) ──┬─ rolling buffer: MPEG-TS seg
 - **Ingest** listens for OBS and writes 1-second segments to a rolling buffer (stream copy, no quality loss). It also decodes a low-latency live feed.
 - **Playout** emits one frame per tick to a single long-lived encoder, so destinations see one continuous stream. When live, it plays the live feed. When delayed, a reader decodes the buffer from any past moment, tailing the segment still being written.
 - **Transitions** are rendered into the stream: the picture dims, VHS-style tracking noise rolls in, real footage scrubs from the old position to the new one, and an on-screen icon, timecode and timeline show what's happening. Audio and video stay paired frame by frame throughout.
-- If OBS disconnects while delayed, viewers keep watching until the buffered footage runs out. If OBS reconnects within the grace period, the stream never drops.
+- When you stop streaming in OBS, viewers still see any delayed footage, then the stream ends. If OBS drops out instead (a crash or lost connection), nicedelay keeps the stream up for 15 seconds, showing "RECONNECTING", so a restarted OBS can continue the same stream.
 
 Config lives in `config.json` (created on first save). Changes to quality or the OBS connection apply when the stream ends.
 

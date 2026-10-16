@@ -1,9 +1,12 @@
 import { EventEmitter } from 'node:events';
+import net from 'node:net';
+import { errorMessage } from '../config.ts';
 import type { Config, IngestInfo } from '../types.ts';
 import type { BufferStore, Session } from './buffer.ts';
 import { AUDIO_CHAIN, type FfmpegProcess, killGently, pipe, scaleChain, spawnFfmpeg, tailStderr } from './ffmpeg.ts';
 import { frameBytes } from '../render/yuv.ts';
 import { AVQueue, FrameAssembler } from './queues.ts';
+import { freePort, StopDetector } from './relay.ts';
 
 interface IngestEvents {
   connected: [Session];
@@ -11,7 +14,9 @@ interface IngestEvents {
 }
 
 /**
- * Listens for OBS over RTMP. One ffmpeg process per connection produces:
+ * Listens for OBS over RTMP. OBS connects to a small relay in Node, which forwards the
+ * stream to ffmpeg on an internal port and notices when OBS stops streaming on purpose
+ * (as opposed to crashing or losing the connection). One ffmpeg process per connection produces:
  *   fd 1: decoded live video (output size, CFR)   -> low-latency live path
  *   fd 3: decoded live audio (s16le 48k stereo)
  *   fd 4: segment list (one CSV line per finished segment)
@@ -44,8 +49,14 @@ export class Ingest extends EventEmitter<IngestEvents> {
   connectedAt = 0;
   info: IngestInfo | null = null;
   lastError: string | null = null;
+  /** OBS sent its "stop streaming" commands before the current/last connection closed. */
+  endedByObs = false;
   private proc: FfmpegProcess | null = null;
   private stopped = false;
+  private relay: net.Server | null = null;
+  private obs: net.Socket | null = null;
+  /** where the current ffmpeg process listens (127.0.0.1 only) */
+  private internalPort = 0;
 
   constructor({ config, store }: { config: Config; store: BufferStore }) {
     super();
@@ -67,18 +78,67 @@ export class Ingest extends EventEmitter<IngestEvents> {
 
   start(): void {
     this.stopped = false;
-    this.listen();
+    const { host, port } = this.config.ingest;
+    const relay = net.createServer((socket) => this.accept(socket));
+    relay.on('error', (err) => {
+      this.lastError = `can't listen on ${host}:${port}: ${errorMessage(err)}`;
+      console.warn(`[ingest] ${this.lastError}`);
+    });
+    relay.listen(port, host, () => void this.listen());
+    this.relay = relay;
   }
 
   stop(): void {
     this.stopped = true;
+    this.relay?.close();
+    this.obs?.destroy();
     killGently(this.proc);
   }
 
-  private listen(): void {
+  /** Relays one OBS connection to the waiting ffmpeg process. */
+  private accept(obs: net.Socket): void {
+    if (this.obs) {
+      obs.destroy(); // one publisher at a time
+      return;
+    }
+    this.obs = obs;
+    this.endedByObs = false;
+    obs.setNoDelay(true);
+    obs.pause();
+    obs.on('error', () => {});
+    const detector = new StopDetector();
+    let upstream: net.Socket | null = null;
+    obs.on('close', () => {
+      if (this.obs === obs) this.obs = null;
+      upstream?.end();
+    });
+    // ffmpeg may still be starting up (it restarts after each connection): retry briefly.
+    const connect = (attempt: number) => {
+      const up = net.connect(this.internalPort, '127.0.0.1');
+      up.on('error', () => {
+        if (!upstream && attempt < 50 && !obs.destroyed) setTimeout(() => connect(attempt + 1), 50);
+        else obs.destroy();
+      });
+      up.once('connect', () => {
+        upstream = up;
+        up.setNoDelay(true);
+        up.on('close', () => obs.destroy());
+        obs.on('data', (chunk: Buffer) => {
+          if (detector.push(chunk)) this.endedByObs = true;
+        });
+        obs.pipe(up);
+        up.pipe(obs);
+        obs.resume();
+      });
+    };
+    connect(0);
+  }
+
+  private async listen(): Promise<void> {
     if (this.stopped) return;
+    this.internalPort = await freePort();
     const { width: w, height: h, fps } = this.config.output;
-    const { host, port, app, key } = this.config.ingest;
+    const { app, key } = this.config.ingest;
     const { tw, th, rate } = this.thumbGeometry();
     const session = this.store.createSession();
     const filter =
@@ -87,7 +147,7 @@ export class Ingest extends EventEmitter<IngestEvents> {
       `[0:a:0]${AUDIO_CHAIN}[a]`;
     const args = [
       ['-loglevel', 'info'],
-      ['-listen', '1', '-i', `rtmp://${host}:${port}/${app}/${key}`],
+      ['-listen', '1', '-i', `rtmp://127.0.0.1:${this.internalPort}/${app}/${key}`],
       ['-filter_complex', filter],
       ['-map', '[full]', '-f', 'rawvideo', 'pipe:1'],
       ['-map', '[a]', '-f', 's16le', 'pipe:3'],
@@ -160,7 +220,7 @@ export class Ingest extends EventEmitter<IngestEvents> {
         }
       }
       if (proc === this.proc) this.proc = null;
-      if (!this.stopped) setTimeout(() => this.listen(), wasConnected ? 200 : 1000);
+      if (!this.stopped) setTimeout(() => void this.listen(), wasConnected ? 200 : 1000);
     });
   }
 }

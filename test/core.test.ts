@@ -7,6 +7,7 @@ import { validate } from '../src/config.ts';
 import { BufferStore } from '../src/media/buffer.ts';
 import { parseStreamInfo } from '../src/media/ingest.ts';
 import { AVQueue, ByteQueue, FrameAssembler } from '../src/media/queues.ts';
+import { StopDetector } from '../src/media/relay.ts';
 import { formatDelay } from '../src/render/overlay.ts';
 import { crossfade, frameBytes, scaleFrame, toneFrame } from '../src/render/yuv.ts';
 
@@ -155,6 +156,29 @@ describe('parseStreamInfo', () => {
     const withAudio = parseStreamInfo('  Stream #0:1: Audio: aac (LC), 48000 Hz, stereo, fltp, 160 kb/s', info);
     assert.equal(withAudio?.audio, 'aac');
     assert.equal(parseStreamInfo('frame=  100 fps= 30 q=-1.0', info), info);
+  });
+});
+
+/** An RTMP command name as it appears on the wire (AMF0 string). */
+const amf = (name: string) => Buffer.concat([Buffer.from([0x02, 0x00, name.length]), Buffer.from(name)]);
+
+describe('StopDetector', () => {
+  it('spots the stop command', () => {
+    const d = new StopDetector();
+    assert.equal(d.push(Buffer.alloc(5000, 7)), false);
+    assert.equal(d.push(Buffer.concat([Buffer.alloc(100), amf('deleteStream'), Buffer.alloc(10)])), true);
+  });
+
+  it('spots a command split across chunks', () => {
+    const d = new StopDetector();
+    const cmd = amf('FCUnpublish');
+    assert.equal(d.push(Buffer.concat([Buffer.alloc(300), cmd.subarray(0, 6)])), false);
+    assert.equal(d.push(Buffer.concat([cmd.subarray(6), Buffer.alloc(300)])), true);
+  });
+
+  it('ignores the start commands', () => {
+    const d = new StopDetector();
+    assert.equal(d.push(Buffer.concat([amf('FCPublish'), amf('createStream'), amf('publish')])), false);
   });
 });
 
