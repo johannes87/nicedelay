@@ -457,6 +457,9 @@ class Transition {
   private readonly scrubTo: number;
   private readonly span: number;
   private readonly sfx: Buffer | null;
+  private readonly thumbW: number;
+  private readonly thumbH: number;
+  private readonly thumbBytes: number;
   private i = 0;
   private waited = 0;
   private held: Buffer | null = null;
@@ -470,6 +473,9 @@ class Transition {
     this.kind = toDelay > fromDelay ? 'rewind' : 'forward';
     this.B = Math.min(1.35, 0.7 + 0.25 * Math.log10(1 + Math.abs(toDelay - fromDelay) / 5));
     this.fps = playout.fps;
+    this.thumbW = Math.round(playout.w / 10) * 2;
+    this.thumbH = Math.round(playout.h / 10) * 2;
+    this.thumbBytes = frameSize(this.thumbW, this.thumbH);
 
     const store = playout.store;
     const L0 = store.liveEdge;
@@ -584,11 +590,9 @@ class Transition {
 
   private drawThumb(video: Buffer, pos: number): void {
     const { w, h } = this.p;
-    const tw = Math.round(w / 10) * 2;
-    const th = Math.round(h / 10) * 2;
     const thumb = this.p.store.thumbAt(pos);
-    if (thumb && thumb.frame.length === frameSize(tw, th)) {
-      scaleFrame(thumb.frame, tw, th, video, w, h, { luma: 0.62, sat: 0.42 });
+    if (thumb?.frame.length === this.thumbBytes) {
+      scaleFrame(thumb.frame, this.thumbW, this.thumbH, video, w, h, { luma: 0.62, sat: 0.42 });
     } else {
       this.held?.copy(video);
     }
