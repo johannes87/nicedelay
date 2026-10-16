@@ -300,7 +300,7 @@ function blendLuma(
       const yy =
         16 + ((rgba[si] * 47 + rgba[si + 1] * 157 + rgba[si + 2] * 16) >> 8);
       const d = buf[di];
-      buf[di] = d + ((((yy - d) * a + 127) / 255) | 0);
+      buf[di] = d + Math.floor(((yy - d) * a + 127) / 255);
     }
   }
 }
@@ -330,10 +330,14 @@ function blendChroma(buf: Buffer, w: number, h: number, area: BlendArea): void {
       const b = sb / sa;
       const a = (((sa >> 2) * op) >> 8) / 255;
       const ci = ((y0 + y) >> 1) * cw + ((x0 + x) >> 1);
-      buf[u + ci] +=
-        (128 + (-0.1006 * r - 0.3386 * g + 0.4392 * b) - buf[u + ci]) * a;
-      buf[v + ci] +=
-        (128 + (0.4392 * r - 0.3989 * g - 0.0403 * b) - buf[v + ci]) * a;
+      const du = buf[u + ci];
+      const dv = buf[v + ci];
+      buf[u + ci] = Math.round(
+        du + (128 + (-0.1006 * r - 0.3386 * g + 0.4392 * b) - du) * a,
+      );
+      buf[v + ci] = Math.round(
+        dv + (128 + (0.4392 * r - 0.3989 * g - 0.0403 * b) - dv) * a,
+      );
     }
   }
 }
