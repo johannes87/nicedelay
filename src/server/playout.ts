@@ -501,7 +501,8 @@ class Transition {
       this.scrubTo = reader.startTime;
     }
     this.scrubFrom = L0 - fromDelay + this.A;
-    this.span = Math.max(fromDelay, toDelay) * 1.18 || 10;
+    // The track's left end is the larger of the two delays, so the knob travels the full width.
+    this.span = Math.max(fromDelay, toDelay);
     const { sound, soundVolume } = playout.config.transition;
     this.sfx = sound ? tapeWhoosh(this.kind, land + 0.25, soundVolume) : null;
   }
