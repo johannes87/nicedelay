@@ -456,7 +456,7 @@ class Transition {
   readonly target: Source;
   old: Source | null;
   done = false;
-  private readonly p: Playout;
+  private readonly playout: Playout;
   private readonly fps: number;
   private readonly scrubFrom: number;
   private readonly scrubTo: number;
@@ -476,7 +476,7 @@ class Transition {
   private incoming: Buffer | null = null;
 
   constructor(playout: Playout, fromDelay: number, toDelay: number) {
-    this.p = playout;
+    this.playout = playout;
     this.fromDelay = fromDelay;
     this.toDelay = toDelay;
     this.kind = toDelay > fromDelay ? 'rewind' : 'forward';
@@ -523,9 +523,9 @@ class Transition {
 
   render(): AVFrame {
     const t = this.i / this.fps;
-    const audioOff = this.i * this.p.audioBytes;
+    const audioOff = this.i * this.playout.audioBytes;
     // Sources and audio advance every frame; the picture is redrawn only every few frames.
-    const video = this.i % this.drawEvery === 0 || !this.drawn ? Buffer.allocUnsafe(this.p.frameBytes) : null;
+    const video = this.i % this.drawEvery === 0 || !this.drawn ? Buffer.allocUnsafe(this.playout.frameBytes) : null;
     this.i++;
     let out: PhaseOutput;
     if (t < this.A) out = this.intro(video, t);
@@ -535,9 +535,9 @@ class Transition {
       this.drawGraphics(video, out);
       this.drawn = video;
     }
-    const audio = out.audio ?? Buffer.alloc(this.p.audioBytes);
+    const audio = out.audio ?? Buffer.alloc(this.playout.audioBytes);
     if (this.sfx) mixInto(audio, 1, this.sfx, audioOff);
-    return { video: video ?? this.drawn ?? this.p.standbyFrame(), audio };
+    return { video: video ?? this.drawn ?? this.playout.standbyFrame(), audio };
   }
 
   /** Scrub until its time is up — and hold there while the target decoder warms up. */
@@ -547,19 +547,19 @@ class Transition {
 
   /** A: keep the old picture moving while it dims. */
   private intro(video: Buffer | null, t: number): PhaseOutput {
-    const p = this.p;
+    const playout = this.playout;
     const e = easeOut(t / this.A);
-    const src = this.old ? p.pullFrom(this.old, 'none') : null;
+    const src = this.old ? playout.pullFrom(this.old, 'none') : null;
     if (src) {
-      p.lastFrame = src.video;
+      playout.lastFrame = src.video;
       mixInto(src.audio, 1 - e, null, 0);
     }
     if (video) {
-      toneFrame(src?.video ?? p.lastFrame ?? p.standbyFrame(), video, p.w, p.h, {
+      toneFrame(src?.video ?? playout.lastFrame ?? playout.standbyFrame(), video, playout.w, playout.h, {
         luma: 1 - 0.4 * e,
         sat: 1 - 0.55 * e,
       });
-      tapeEffect(video, p.w, p.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
+      tapeEffect(video, playout.w, playout.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
       this.held = video;
     }
     const center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / this.A), progress: 0 };
@@ -568,13 +568,13 @@ class Transition {
 
   /** B: race through thumbnails from the old position to the new one. */
   private scrub(video: Buffer | null, t: number): PhaseOutput {
-    const p = this.p;
+    const playout = this.playout;
     if (t >= this.A + this.B) this.waited++;
     this.releaseOld();
     const u = easeInOut(clamp01((t - this.A) / this.B));
     if (video) {
       this.drawThumb(video, this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
-      tapeEffect(video, p.w, p.h, 0.95, this.i * 7919, (t * 1.9) % 1);
+      tapeEffect(video, playout.w, playout.h, 0.95, this.i * 7919, (t * 1.9) % 1);
       this.lastScrub = video;
     }
     const center = { alpha: 1, pop: 1 + 0.03 * Math.sin(t * 18), progress: u };
@@ -583,17 +583,17 @@ class Transition {
 
   /** C: crossfade into the new source while the graphics fade out. */
   private land(video: Buffer | null, t: number): PhaseOutput {
-    const p = this.p;
+    const playout = this.playout;
     const e = easeOut(clamp01((t - this.A - this.B - this.waited / this.fps) / this.C));
-    const src = p.pullFrom(this.target, 'fast');
+    const src = playout.pullFrom(this.target, 'fast');
     if (src) {
       this.incoming = src.video;
       mixInto(src.audio, e, null, 0);
     }
-    const from = this.lastScrub ?? this.held ?? p.standbyFrame();
+    const from = this.lastScrub ?? this.held ?? playout.standbyFrame();
     if (video && this.incoming) {
       crossfade(from, this.incoming, video, e);
-      tapeEffect(video, p.w, p.h, 0.6 * (1 - e), this.i * 7919, (t * 1.9) % 1);
+      tapeEffect(video, playout.w, playout.h, 0.6 * (1 - e), this.i * 7919, (t * 1.9) % 1);
     } else if (video) {
       from.copy(video);
     }
@@ -611,12 +611,12 @@ class Transition {
   }
 
   private drawThumb(video: Buffer, pos: number): void {
-    const { w, h } = this.p;
-    const thumb = this.p.store.thumbAt(pos);
+    const { w, h } = this.playout;
+    const thumb = this.playout.store.thumbAt(pos);
     if (thumb?.frame.length === this.thumbBytes) {
       // Upscaling is the expensive part, and consecutive frames often show the same thumbnail.
       if (this.scaledThumb?.from !== thumb.frame) {
-        const frame = Buffer.allocUnsafe(this.p.frameBytes);
+        const frame = Buffer.allocUnsafe(this.playout.frameBytes);
         scaleFrame(thumb.frame, this.thumbW, this.thumbH, frame, w, h, { luma: 0.62, sat: 0.42 });
         this.scaledThumb = { from: thumb.frame, frame };
       }
@@ -628,13 +628,13 @@ class Transition {
 
   private drawGraphics(video: Buffer, out: PhaseOutput): void {
     const showLive = this.toDelay === 0 && out.center.progress > 0.97;
-    this.p.overlay.drawCenter(video, {
+    this.playout.overlay.drawCenter(video, {
       kind: this.kind,
       ...out.center,
       timecode: showLive ? 'LIVE' : formatDelay(out.delay),
       label: this.label,
     });
-    this.p.overlay.drawTimeline(video, { alpha: out.lineAlpha, span: this.span, knob: out.delay });
+    this.playout.overlay.drawTimeline(video, { alpha: out.lineAlpha, span: this.span, knob: out.delay });
   }
 
   private get label(): string {
