@@ -45,6 +45,13 @@ function buttonLabel(mode: Mode, nextDelay: number): string {
   return mode === 'delayed' ? 'Go live' : `Delay ${short(nextDelay)}`;
 }
 
+/** How the stream ends, shown while on air. */
+function endHint(state: AppState | null): string | null {
+  if (!state || state.playout.mode === 'idle') return null;
+  if (!state.ingest.connected) return 'OBS stopped. The stream ends automatically.';
+  return 'To end the stream, stop streaming in OBS.';
+}
+
 export function Hero({ state, readout, transition, onToggle, onSetup }: Props) {
   const mode = state?.playout.mode ?? 'idle';
   const text = useTransform(readout, (v) => clock(v));
@@ -128,7 +135,27 @@ export function Hero({ state, readout, transition, onToggle, onSetup }: Props) {
         </AnimatePresence>
         {interactive && <kbd>space</kbd>}
       </motion.button>
+      <EndHint text={endHint(state)} />
     </div>
+  );
+}
+
+function EndHint({ text }: Readonly<{ text: string | null }>) {
+  return (
+    <AnimatePresence mode="wait" initial={false}>
+      {text && (
+        <motion.p
+          key={text}
+          className="end-hint"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          {text}
+        </motion.p>
+      )}
+    </AnimatePresence>
   );
 }
 
