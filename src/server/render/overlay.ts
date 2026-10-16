@@ -1,5 +1,5 @@
 import { type Canvas, createCanvas, type SKRSContext2D } from '@napi-rs/canvas';
-import type { TransitionKind } from '../types.ts';
+import type { TransitionKind } from '../../shared/types.ts';
 import { blendRGBA } from './yuv.ts';
 
 export const COLORS = {

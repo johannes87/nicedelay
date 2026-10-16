@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import { errorMessage } from '../config.ts';
-import type { Config, IngestInfo } from '../types.ts';
+import type { Config, IngestInfo } from '../../shared/types.ts';
 import type { BufferStore, Session } from './buffer.ts';
 import { AUDIO_CHAIN, type FfmpegProcess, killGently, pipe, scaleChain, spawnFfmpeg, tailStderr } from './ffmpeg.ts';
 import { frameBytes } from '../render/yuv.ts';

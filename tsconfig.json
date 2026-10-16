@@ -15,5 +15,5 @@
     "noUncheckedIndexedAccess": false,
     "skipLibCheck": true
   },
-  "include": ["src", "test", "vite.config.ts"]
+  "include": ["src/server", "src/shared", "test", "vite.config.ts"]
 }

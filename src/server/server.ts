@@ -8,9 +8,9 @@ import { pickEncoder } from './media/encoder.ts';
 import { FFMPEG, hasEncoder } from './media/ffmpeg.ts';
 import { Ingest } from './media/ingest.ts';
 import { Playout } from './playout.ts';
-import type { AppState, CommandResult, ConfigResponse } from './types.ts';
+import type { AppState, CommandResult, ConfigResponse } from '../shared/types.ts';
 
-const WEB_ROOT = path.resolve(import.meta.dirname, '..', 'dist', 'web');
+const WEB_ROOT = path.resolve(import.meta.dirname, '../..', 'dist', 'web');
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

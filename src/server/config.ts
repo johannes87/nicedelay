@@ -1,10 +1,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Config, EncoderChoice } from './types.ts';
+import type { Config, EncoderChoice } from '../shared/types.ts';
 
-export type { Config, Destination, EncoderChoice } from './types.ts';
+export type { Config, Destination, EncoderChoice } from '../shared/types.ts';
 
-const ROOT = path.resolve(import.meta.dirname, '..');
+const ROOT = path.resolve(import.meta.dirname, '../..');
 
 export const CONFIG_PATH = process.env.NICEDELAY_CONFIG || path.join(ROOT, 'config.json');
 

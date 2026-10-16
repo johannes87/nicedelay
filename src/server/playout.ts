@@ -8,9 +8,9 @@ import { BufferReader } from './media/reader.ts';
 import { formatDelay, Overlay, type PillParams } from './render/overlay.ts';
 import { mixInto, tapeWhoosh } from './render/sfx.ts';
 import { crossfade, frameBytes, scaleFrame, tapeEffect, toneFrame } from './render/yuv.ts';
-import type { CommandResult, Config, Mode, PlayoutState, TransitionEvent, TransitionKind } from './types.ts';
+import type { CommandResult, Config, Mode, PlayoutState, TransitionEvent, TransitionKind } from '../shared/types.ts';
 
-export type { CommandResult, Mode, PlayoutState, TransitionEvent } from './types.ts';
+export type { CommandResult, Mode, PlayoutState, TransitionEvent } from '../shared/types.ts';
 
 const PILL_HOLD = 3; // seconds the corner pill stays after a transition
 const PILL_FADE = 0.6;

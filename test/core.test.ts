@@ -3,13 +3,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'node:test';
-import { validate } from '../src/config.ts';
-import { BufferStore } from '../src/media/buffer.ts';
-import { parseStreamInfo } from '../src/media/ingest.ts';
-import { AVQueue, ByteQueue, FrameAssembler } from '../src/media/queues.ts';
-import { StopDetector } from '../src/media/relay.ts';
-import { formatDelay } from '../src/render/overlay.ts';
-import { crossfade, frameBytes, scaleFrame, toneFrame } from '../src/render/yuv.ts';
+import { validate } from '../src/server/config.ts';
+import { BufferStore } from '../src/server/media/buffer.ts';
+import { parseStreamInfo } from '../src/server/media/ingest.ts';
+import { AVQueue, ByteQueue, FrameAssembler } from '../src/server/media/queues.ts';
+import { StopDetector } from '../src/server/media/relay.ts';
+import { formatDelay } from '../src/server/render/overlay.ts';
+import { crossfade, frameBytes, scaleFrame, toneFrame } from '../src/server/render/yuv.ts';
 
 const FPS = 30;
 const BPF = (48_000 / FPS) * 4; // audio bytes per video frame

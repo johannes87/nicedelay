@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useState } from 'react';
-import type { AppState, CommandResult, Config, ConfigResponse, TransitionEvent } from '../../src/types.ts';
+import type { AppState, CommandResult, Config, ConfigResponse, TransitionEvent } from '../shared/types.ts';
 
-export type { AppState, Config, Destination, TransitionEvent } from '../../src/types.ts';
+export type { AppState, Config, Destination, TransitionEvent } from '../shared/types.ts';
 
 /** The MJPEG preview reaches the page ~0.3 s after the server renders a frame; UI animations wait for it. */
 export const PREVIEW_LATENCY = 0.3;
