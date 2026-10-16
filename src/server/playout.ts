@@ -7,17 +7,36 @@ import type { AVFrame } from './media/queues.ts';
 import { BufferReader } from './media/reader.ts';
 import { formatDelay, Overlay, type PillParams } from './render/overlay.ts';
 import { mixInto, tapeWhoosh } from './render/sfx.ts';
-import { crossfade, frameBytes, scaleFrame, tapeEffect, toneFrame } from './render/yuv.ts';
-import type { CommandResult, Config, Mode, PlayoutState, TransitionEvent, TransitionKind } from '../shared/types.ts';
+import {
+  crossfade,
+  frameBytes,
+  scaleFrame,
+  tapeEffect,
+  toneFrame,
+} from './render/yuv.ts';
+import type {
+  CommandResult,
+  Config,
+  Mode,
+  PlayoutState,
+  TransitionEvent,
+  TransitionKind,
+} from '../shared/types.ts';
 
-export type { CommandResult, Mode, PlayoutState, TransitionEvent } from '../shared/types.ts';
+export type {
+  CommandResult,
+  Mode,
+  PlayoutState,
+  TransitionEvent,
+} from '../shared/types.ts';
 
 const PILL_HOLD = 3; // seconds the corner pill stays after a transition
 const PILL_FADE = 0.6;
 const READY_TIMEOUT = 3; // max seconds to wait for a reader at landing
 const MAX_DRAW_FPS = 30; // transition animation frame rate cap (keeps 60 fps output within budget)
 
-const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
+const easeInOut = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 const easeOut = (t: number) => 1 - (1 - t) ** 3;
 const backOut = (t: number) => 1 + 2.9 * (t - 1) ** 3 + 1.9 * (t - 1) ** 2;
 const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
@@ -74,7 +93,15 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   private clockRunning = false;
   private timer: NodeJS.Timeout | undefined;
 
-  constructor({ config, store, ingest }: { config: Config; store: BufferStore; ingest: Ingest }) {
+  constructor({
+    config,
+    store,
+    ingest,
+  }: {
+    config: Config;
+    store: BufferStore;
+    ingest: Ingest;
+  }) {
     super();
     this.config = config;
     this.store = store;
@@ -158,7 +185,10 @@ export class Playout extends EventEmitter<PlayoutEvents> {
         this.tick();
         n++;
       }
-      this.timer = setTimeout(loop, Math.max(0, t0 + n * period - performance.now()));
+      this.timer = setTimeout(
+        loop,
+        Math.max(0, t0 + n * period - performance.now()),
+      );
     };
     loop();
   }
@@ -167,11 +197,15 @@ export class Playout extends EventEmitter<PlayoutEvents> {
 
   /** Max delay that can be applied right now (limited by what's recorded). */
   get maxDelay(): number {
-    return Math.max(0, Math.min(this.config.bufferMinutes * 60 - 2, this.store.recorded - 0.5));
+    return Math.max(
+      0,
+      Math.min(this.config.bufferMinutes * 60 - 2, this.store.recorded - 0.5),
+    );
   }
 
   setDelay(seconds: unknown): CommandResult {
-    if (this.mode === 'idle') return { ok: false, error: 'Not streaming — connect OBS first.' };
+    if (this.mode === 'idle')
+      return { ok: false, error: 'Not streaming — connect OBS first.' };
     let d = Number(seconds);
     if (!Number.isFinite(d) || d <= 0) return this.goLive();
     let clamped = false;
@@ -184,7 +218,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       this.pending = { delay: d };
       return { ok: true, queued: true, delay: d, clamped };
     }
-    if (this.mode === 'delayed' && Math.abs(d - this.targetDelay) < 0.5) return { ok: true, delay: d, clamped };
+    if (this.mode === 'delayed' && Math.abs(d - this.targetDelay) < 0.5)
+      return { ok: true, delay: d, clamped };
     this.beginTransition(d);
     return { ok: true, delay: d, clamped };
   }
@@ -221,7 +256,11 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       kind: t.kind,
       from: fromDelay,
       to: toDelay,
-      phases: { intro: t.introSeconds, scrub: t.scrubSeconds, land: t.landSeconds },
+      phases: {
+        intro: t.introSeconds,
+        scrub: t.scrubSeconds,
+        land: t.landSeconds,
+      },
     });
     this.emit('change');
   }
@@ -231,7 +270,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   private tick(): void {
     this.ticks++;
     // The live queue must keep flowing even while not shown, so it stays at the live edge.
-    if (this.ingest.live && !this.wantsLive()) this.ingest.live.trimTo(this.liveTarget);
+    if (this.ingest.live && !this.wantsLive())
+      this.ingest.live.trimTo(this.liveTarget);
 
     let out: AVFrame | null;
     if (this.transition) {
@@ -247,7 +287,10 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     } else {
       this.underruns++;
       if (this.checkStarved()) return;
-      out = { video: this.standbyFrame(), audio: Buffer.alloc(this.audioBytes) };
+      out = {
+        video: this.standbyFrame(),
+        audio: Buffer.alloc(this.audioBytes),
+      };
     }
 
     const pill = this.currentPill();
@@ -284,13 +327,20 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     return q.pull(q.length > this.liveMax);
   }
 
-  pullReader(src: ReaderSource, correct: Correction = 'steady'): AVFrame | null {
+  pullReader(
+    src: ReaderSource,
+    correct: Correction = 'steady',
+  ): AVFrame | null {
     let r = src.reader;
     if (r.exhausted) {
       const next = this.store.nextSession(r.session);
       if (!next) return null;
       try {
-        const nr = new BufferReader({ store: this.store, config: this.config, t: next.base });
+        const nr = new BufferReader({
+          store: this.store,
+          config: this.config,
+          t: next.base,
+        });
         r.destroy();
         src.reader = r = nr;
       } catch {
@@ -314,7 +364,9 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   }
 
   pullFrom(src: Source, correct: Correction = 'steady'): AVFrame | null {
-    return src.kind === 'live' ? this.pullLive() : this.pullReader(src, correct);
+    return src.kind === 'live'
+      ? this.pullLive()
+      : this.pullReader(src, correct);
   }
 
   private pullSource(): AVFrame | null {
@@ -337,18 +389,27 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   }
 
   private currentPill(): PillParams | null {
-    if (this.starvedSince !== null && this.ticks / this.fps - this.starvedSince > 1) {
+    if (
+      this.starvedSince !== null &&
+      this.ticks / this.fps - this.starvedSince > 1
+    ) {
       return { kind: 'live', text: 'RECONNECTING', alpha: 0.95 };
     }
     if (this.transition) return null;
-    let alpha = this.config.transition.badge && this.mode === 'delayed' ? 0.9 : 0;
+    let alpha =
+      this.config.transition.badge && this.mode === 'delayed' ? 0.9 : 0;
     if (this.pill) {
       const age = (this.ticks - this.pill.start) / this.fps;
       if (age > PILL_HOLD + PILL_FADE) this.pill = null;
       alpha = Math.max(alpha, clamp01(pillAlpha(age)));
     }
     if (alpha <= 0) return null;
-    if (this.mode === 'delayed') return { kind: 'replay', text: `REPLAY  ${formatDelay(this.targetDelay)}`, alpha };
+    if (this.mode === 'delayed')
+      return {
+        kind: 'replay',
+        text: `REPLAY  ${formatDelay(this.targetDelay)}`,
+        alpha,
+      };
     return { kind: 'live', text: 'LIVE', alpha };
   }
 
@@ -377,10 +438,14 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     if (this.ingest.connected) return false;
     const now = this.ticks / this.fps;
     this.starvedSince ??= now;
-    const grace = this.ingest.endedByObs ? 0 : this.config.reconnectGraceSeconds;
+    const grace = this.ingest.endedByObs
+      ? 0
+      : this.config.reconnectGraceSeconds;
     if (now - this.starvedSince < grace) return false;
     console.log(
-      this.ingest.endedByObs ? '[playout] OBS stopped streaming, ending output' : '[playout] OBS gone, ending output',
+      this.ingest.endedByObs
+        ? '[playout] OBS stopped streaming, ending output'
+        : '[playout] OBS gone, ending output',
     );
     this.stopOutput();
     return true;
@@ -388,10 +453,13 @@ export class Playout extends EventEmitter<PlayoutEvents> {
 
   private housekeeping(): void {
     let protect = Infinity;
-    const readers = [this.source, this.transition?.target, this.transition?.old].flatMap((s) =>
-      s?.kind === 'reader' ? [s.reader] : [],
-    );
-    for (const r of readers) protect = Math.min(protect, r.startTime, r.position);
+    const readers = [
+      this.source,
+      this.transition?.target,
+      this.transition?.old,
+    ].flatMap((s) => (s?.kind === 'reader' ? [s.reader] : []));
+    for (const r of readers)
+      protect = Math.min(protect, r.startTime, r.position);
     this.store.trim(protect);
     this.emit('tick');
   }
@@ -399,7 +467,9 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   // ---------------------------------------------------------------- state
 
   get position(): number {
-    return this.source?.kind === 'reader' ? this.source.reader.position : this.store.liveEdge;
+    return this.source?.kind === 'reader'
+      ? this.source.reader.position
+      : this.store.liveEdge;
   }
 
   get effectiveDelay(): number {
@@ -415,7 +485,14 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       targetDelay: this.targetDelay,
       effectiveDelay: Math.round(this.effectiveDelay * 10) / 10,
       maxDelay: Math.floor(this.maxDelay),
-      transition: t ? { kind: t.kind, from: t.fromDelay, to: t.toDelay, progress: t.progress } : null,
+      transition: t
+        ? {
+            kind: t.kind,
+            from: t.fromDelay,
+            to: t.toDelay,
+            progress: t.progress,
+          }
+        : null,
       output: {
         running: !!enc?.running,
         codec: enc?.codec ?? null,
@@ -482,7 +559,10 @@ class Transition {
     this.toDelay = toDelay;
     this.kind = toDelay > fromDelay ? 'rewind' : 'forward';
     // Bigger jumps scrub a little longer: 0.78 s for 5 s, 1.15 s for 5 min, at most 1.35 s.
-    this.scrubSeconds = Math.min(1.35, 0.7 + 0.25 * Math.log10(1 + Math.abs(toDelay - fromDelay) / 5));
+    this.scrubSeconds = Math.min(
+      1.35,
+      0.7 + 0.25 * Math.log10(1 + Math.abs(toDelay - fromDelay) / 5),
+    );
     this.fps = playout.fps;
     this.drawEvery = Math.max(1, Math.round(playout.fps / MAX_DRAW_FPS));
     this.thumbW = Math.round(playout.w / 10) * 2;
@@ -498,7 +578,11 @@ class Transition {
       this.scrubTo = L0 + landsAt;
     } else {
       // Start decoding now so the picture is ready exactly when the scrub lands.
-      const reader = new BufferReader({ store, config: playout.config, t: L0 + landsAt - toDelay });
+      const reader = new BufferReader({
+        store,
+        config: playout.config,
+        t: L0 + landsAt - toDelay,
+      });
       this.target = { kind: 'reader', reader };
       this.scrubTo = reader.startTime;
     }
@@ -506,11 +590,17 @@ class Transition {
     // The track's left end is the larger of the two delays, so the knob travels the full width.
     this.span = Math.max(fromDelay, toDelay);
     const { sound, soundVolume } = playout.config.transition;
-    this.sfx = sound ? tapeWhoosh(this.kind, landsAt + 0.25, soundVolume) : null;
+    this.sfx = sound
+      ? tapeWhoosh(this.kind, landsAt + 0.25, soundVolume)
+      : null;
   }
 
   get progress(): number {
-    return clamp01(this.i / this.fps / (this.introSeconds + this.scrubSeconds + this.landSeconds));
+    return clamp01(
+      this.i /
+        this.fps /
+        (this.introSeconds + this.scrubSeconds + this.landSeconds),
+    );
   }
 
   /** Whether the current phase consumes the live feed (otherwise Playout keeps it trimmed). */
@@ -518,7 +608,8 @@ class Transition {
     const t = this.i / this.fps;
     return (
       (t < this.introSeconds && this.old?.kind === 'live') ||
-      (t >= this.introSeconds + this.scrubSeconds && this.target.kind === 'live')
+      (t >= this.introSeconds + this.scrubSeconds &&
+        this.target.kind === 'live')
     );
   }
 
@@ -530,7 +621,10 @@ class Transition {
     const t = this.i / this.fps;
     const audioOff = this.i * this.playout.audioBytes;
     // Sources and audio advance every frame; the picture is redrawn only every few frames.
-    const video = this.i % this.drawEvery === 0 || !this.drawn ? Buffer.allocUnsafe(this.playout.frameBytes) : null;
+    const video =
+      this.i % this.drawEvery === 0 || !this.drawn
+        ? Buffer.allocUnsafe(this.playout.frameBytes)
+        : null;
     this.i++;
     let out: PhaseOutput;
     if (t < this.introSeconds) out = this.intro(video, t);
@@ -547,7 +641,10 @@ class Transition {
 
   /** Scrub until its time is up — and hold there while the target decoder warms up. */
   private scrubbing(t: number): boolean {
-    return t < this.introSeconds + this.scrubSeconds || (!this.targetReady && this.waited < READY_TIMEOUT * this.fps);
+    return (
+      t < this.introSeconds + this.scrubSeconds ||
+      (!this.targetReady && this.waited < READY_TIMEOUT * this.fps)
+    );
   }
 
   /** Intro: keep the old picture moving while it dims. */
@@ -560,15 +657,37 @@ class Transition {
       mixInto(src.audio, 1 - e, null, 0);
     }
     if (video) {
-      toneFrame(src?.video ?? playout.lastFrame ?? playout.standbyFrame(), video, playout.w, playout.h, {
-        luma: 1 - 0.4 * e,
-        sat: 1 - 0.55 * e,
-      });
-      tapeEffect(video, playout.w, playout.h, 0.45 * e, this.i * 7919, (t * 1.7) % 1);
+      toneFrame(
+        src?.video ?? playout.lastFrame ?? playout.standbyFrame(),
+        video,
+        playout.w,
+        playout.h,
+        {
+          luma: 1 - 0.4 * e,
+          sat: 1 - 0.55 * e,
+        },
+      );
+      tapeEffect(
+        video,
+        playout.w,
+        playout.h,
+        0.45 * e,
+        this.i * 7919,
+        (t * 1.7) % 1,
+      );
       this.held = video;
     }
-    const center = { alpha: e, pop: 0.55 + 0.45 * backOut(t / this.introSeconds), progress: 0 };
-    return { audio: src?.audio ?? null, center, delay: this.fromDelay, lineAlpha: e };
+    const center = {
+      alpha: e,
+      pop: 0.55 + 0.45 * backOut(t / this.introSeconds),
+      progress: 0,
+    };
+    return {
+      audio: src?.audio ?? null,
+      center,
+      delay: this.fromDelay,
+      lineAlpha: e,
+    };
   }
 
   /** Scrub: race through thumbnails from the old position to the new one. */
@@ -578,18 +697,38 @@ class Transition {
     this.releaseOld();
     const u = easeInOut(clamp01((t - this.introSeconds) / this.scrubSeconds));
     if (video) {
-      this.drawThumb(video, this.scrubFrom + (this.scrubTo - this.scrubFrom) * u);
-      tapeEffect(video, playout.w, playout.h, 0.95, this.i * 7919, (t * 1.9) % 1);
+      this.drawThumb(
+        video,
+        this.scrubFrom + (this.scrubTo - this.scrubFrom) * u,
+      );
+      tapeEffect(
+        video,
+        playout.w,
+        playout.h,
+        0.95,
+        this.i * 7919,
+        (t * 1.9) % 1,
+      );
       this.lastScrub = video;
     }
     const center = { alpha: 1, pop: 1 + 0.03 * Math.sin(t * 18), progress: u };
-    return { audio: null, center, delay: this.fromDelay + (this.toDelay - this.fromDelay) * u, lineAlpha: 1 };
+    return {
+      audio: null,
+      center,
+      delay: this.fromDelay + (this.toDelay - this.fromDelay) * u,
+      lineAlpha: 1,
+    };
   }
 
   /** Land: crossfade into the new source while the graphics fade out. */
   private land(video: Buffer | null, t: number): PhaseOutput {
     const playout = this.playout;
-    const e = easeOut(clamp01((t - this.introSeconds - this.scrubSeconds - this.waited / this.fps) / this.landSeconds));
+    const e = easeOut(
+      clamp01(
+        (t - this.introSeconds - this.scrubSeconds - this.waited / this.fps) /
+          this.landSeconds,
+      ),
+    );
     const src = playout.pullFrom(this.target, 'fast');
     if (src) {
       this.incoming = src.video;
@@ -598,13 +737,25 @@ class Transition {
     const from = this.lastScrub ?? this.held ?? playout.standbyFrame();
     if (video && this.incoming) {
       crossfade(from, this.incoming, video, e);
-      tapeEffect(video, playout.w, playout.h, 0.6 * (1 - e), this.i * 7919, (t * 1.9) % 1);
+      tapeEffect(
+        video,
+        playout.w,
+        playout.h,
+        0.6 * (1 - e),
+        this.i * 7919,
+        (t * 1.9) % 1,
+      );
     } else if (video) {
       from.copy(video);
     }
     if (e >= 1) this.done = true;
     const center = { alpha: 1 - e, pop: 1 + 0.18 * e, progress: 1 };
-    return { audio: src?.audio ?? null, center, delay: this.toDelay, lineAlpha: 1 - e };
+    return {
+      audio: src?.audio ?? null,
+      center,
+      delay: this.toDelay,
+      lineAlpha: 1 - e,
+    };
   }
 
   /** The old reader is no longer needed once the scrub starts. */
@@ -622,7 +773,10 @@ class Transition {
       // Upscaling is the expensive part, and consecutive frames often show the same thumbnail.
       if (this.scaledThumb?.from !== thumb.frame) {
         const frame = Buffer.allocUnsafe(this.playout.frameBytes);
-        scaleFrame(thumb.frame, this.thumbW, this.thumbH, frame, w, h, { luma: 0.62, sat: 0.42 });
+        scaleFrame(thumb.frame, this.thumbW, this.thumbH, frame, w, h, {
+          luma: 0.62,
+          sat: 0.42,
+        });
         this.scaledThumb = { from: thumb.frame, frame };
       }
       this.scaledThumb.frame.copy(video);
@@ -639,7 +793,11 @@ class Transition {
       timecode: showLive ? 'LIVE' : formatDelay(out.delay),
       label: this.label,
     });
-    this.playout.overlay.drawTimeline(video, { alpha: out.lineAlpha, span: this.span, knob: out.delay });
+    this.playout.overlay.drawTimeline(video, {
+      alpha: out.lineAlpha,
+      span: this.span,
+      knob: out.delay,
+    });
   }
 
   private get label(): string {

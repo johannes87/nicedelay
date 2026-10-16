@@ -6,10 +6,19 @@ import { describe, it } from 'node:test';
 import { validate } from '../src/server/config.ts';
 import { BufferStore } from '../src/server/media/buffer.ts';
 import { parseStreamInfo } from '../src/server/media/ingest.ts';
-import { AVQueue, ByteQueue, FrameAssembler } from '../src/server/media/queues.ts';
+import {
+  AVQueue,
+  ByteQueue,
+  FrameAssembler,
+} from '../src/server/media/queues.ts';
 import { StopDetector } from '../src/server/media/relay.ts';
 import { formatDelay } from '../src/server/render/overlay.ts';
-import { crossfade, frameBytes, scaleFrame, toneFrame } from '../src/server/render/yuv.ts';
+import {
+  crossfade,
+  frameBytes,
+  scaleFrame,
+  toneFrame,
+} from '../src/server/render/yuv.ts';
 
 const FPS = 30;
 const BPF = (48_000 / FPS) * 4; // audio bytes per video frame
@@ -17,7 +26,8 @@ const BPF = (48_000 / FPS) * 4; // audio bytes per video frame
 /** Audio bytes whose value encodes the frame they belong to. */
 function audioFor(frame: number, frames = 1): Buffer {
   const b = Buffer.alloc(BPF * frames);
-  for (let f = 0; f < frames; f++) b.fill((frame + f) % 256, f * BPF, (f + 1) * BPF);
+  for (let f = 0; f < frames; f++)
+    b.fill((frame + f) % 256, f * BPF, (f + 1) * BPF);
   return b;
 }
 
@@ -152,33 +162,62 @@ describe('parseStreamInfo', () => {
     const video =
       '  Stream #0:0: Video: h264 (High), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 6000 kb/s, 29.97 fps, 1k tbn';
     const info = parseStreamInfo(video, null);
-    assert.deepEqual(info, { codec: 'h264', width: 1920, height: 1080, fps: 29.97 });
-    const withAudio = parseStreamInfo('  Stream #0:1: Audio: aac (LC), 48000 Hz, stereo, fltp, 160 kb/s', info);
+    assert.deepEqual(info, {
+      codec: 'h264',
+      width: 1920,
+      height: 1080,
+      fps: 29.97,
+    });
+    const withAudio = parseStreamInfo(
+      '  Stream #0:1: Audio: aac (LC), 48000 Hz, stereo, fltp, 160 kb/s',
+      info,
+    );
     assert.equal(withAudio?.audio, 'aac');
     assert.equal(parseStreamInfo('frame=  100 fps= 30 q=-1.0', info), info);
   });
 });
 
 /** An RTMP command name as it appears on the wire (AMF0 string). */
-const amf = (name: string) => Buffer.concat([Buffer.from([0x02, 0x00, name.length]), Buffer.from(name)]);
+const amf = (name: string) =>
+  Buffer.concat([Buffer.from([0x02, 0x00, name.length]), Buffer.from(name)]);
 
 describe('StopDetector', () => {
   it('spots the stop command', () => {
     const d = new StopDetector();
     assert.equal(d.push(Buffer.alloc(5000, 7)), false);
-    assert.equal(d.push(Buffer.concat([Buffer.alloc(100), amf('deleteStream'), Buffer.alloc(10)])), true);
+    assert.equal(
+      d.push(
+        Buffer.concat([
+          Buffer.alloc(100),
+          amf('deleteStream'),
+          Buffer.alloc(10),
+        ]),
+      ),
+      true,
+    );
   });
 
   it('spots a command split across chunks', () => {
     const d = new StopDetector();
     const cmd = amf('FCUnpublish');
-    assert.equal(d.push(Buffer.concat([Buffer.alloc(300), cmd.subarray(0, 6)])), false);
-    assert.equal(d.push(Buffer.concat([cmd.subarray(6), Buffer.alloc(300)])), true);
+    assert.equal(
+      d.push(Buffer.concat([Buffer.alloc(300), cmd.subarray(0, 6)])),
+      false,
+    );
+    assert.equal(
+      d.push(Buffer.concat([cmd.subarray(6), Buffer.alloc(300)])),
+      true,
+    );
   });
 
   it('ignores the start commands', () => {
     const d = new StopDetector();
-    assert.equal(d.push(Buffer.concat([amf('FCPublish'), amf('createStream'), amf('publish')])), false);
+    assert.equal(
+      d.push(
+        Buffer.concat([amf('FCPublish'), amf('createStream'), amf('publish')]),
+      ),
+      false,
+    );
   });
 });
 
@@ -195,7 +234,9 @@ describe('validate', () => {
     assert.equal(c.output.fps, 30);
     assert.equal(c.output.encoder, 'auto');
     assert.equal(c.output.videoBitrate, 4500);
-    assert.deepEqual(c.destinations, [{ name: '', url: 'rtmps://x/app', key: '', enabled: true }]);
+    assert.deepEqual(c.destinations, [
+      { name: '', url: 'rtmps://x/app', key: '', enabled: true },
+    ]);
     assert.equal(c.ingest.key, 'abc');
     assert.equal(c.delaySeconds, 120);
   });

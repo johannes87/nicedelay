@@ -21,7 +21,9 @@ export class ByteQueue {
 
   /** Copy up to `n` bytes into `dst` at `dstOffset`; returns bytes copied. */
   readInto(dst: Buffer, dstOffset: number, n: number): number {
-    return this.consume(n, (head, from, take, done) => head.copy(dst, dstOffset + done, from, from + take));
+    return this.consume(n, (head, from, take, done) =>
+      head.copy(dst, dstOffset + done, from, from + take),
+    );
   }
 
   skip(n: number): number {
@@ -34,7 +36,10 @@ export class ByteQueue {
     this.length = 0;
   }
 
-  private consume(n: number, each?: (head: Buffer, from: number, take: number, done: number) => void): number {
+  private consume(
+    n: number,
+    each?: (head: Buffer, from: number, take: number, done: number) => void,
+  ): number {
     let done = 0;
     while (done < n && this.chunks.length) {
       const head = this.chunks[0];
@@ -120,15 +125,20 @@ export class AVQueue {
   /** Drop audio belonging to frames that were already consumed or dropped. */
   alignAudio(): void {
     const want = this.next * this.bytesPerFrame;
-    if (this.audioHead < want) this.audioHead += this.audio.skip(want - this.audioHead);
+    if (this.audioHead < want)
+      this.audioHead += this.audio.skip(want - this.audioHead);
     // Never let audio run more than 3 s ahead of video (e.g. video stalled).
     const maxAhead = this.bytesPerFrame * this.fps * 3;
-    if (this.audio.length > maxAhead) this.audioHead += this.audio.skip(this.audio.length - maxAhead);
+    if (this.audio.length > maxAhead)
+      this.audioHead += this.audio.skip(this.audio.length - maxAhead);
   }
 
   hasAudioForNext(): boolean {
     this.alignAudio();
-    return this.audioHead === this.next * this.bytesPerFrame && this.audio.length >= this.bytesPerFrame;
+    return (
+      this.audioHead === this.next * this.bytesPerFrame &&
+      this.audio.length >= this.bytesPerFrame
+    );
   }
 
   /**

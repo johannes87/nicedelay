@@ -24,5 +24,7 @@ export function spoken(seconds: number): string {
   if (s < 60) return plural(s, 'second');
   const m = Math.floor(s / 60);
   const rest = s % 60;
-  return rest ? `${plural(m, 'minute')} ${plural(rest, 'second')}` : plural(m, 'minute');
+  return rest
+    ? `${plural(m, 'minute')} ${plural(rest, 'second')}`
+    : plural(m, 'minute');
 }

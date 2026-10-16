@@ -1,6 +1,11 @@
 import { animate, useMotionValue } from 'motion/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, PREVIEW_LATENCY, type TransitionEvent, useServer } from './api.ts';
+import {
+  api,
+  PREVIEW_LATENCY,
+  type TransitionEvent,
+  useServer,
+} from './api.ts';
 import { DelayPicker } from './components/DelayPicker.tsx';
 import { Hero } from './components/Hero.tsx';
 import { Preview } from './components/Preview.tsx';
@@ -24,9 +29,15 @@ export function App() {
       setTransition(t);
       readout.set(t.from);
       const delay = PREVIEW_LATENCY + t.phases.intro;
-      void animate(readout, t.to, { delay, duration: t.phases.scrub, ease: SCRUB_EASE });
+      void animate(readout, t.to, {
+        delay,
+        duration: t.phases.scrub,
+        ease: SCRUB_EASE,
+      });
       window.clearTimeout(endTimer.current);
-      const total = (PREVIEW_LATENCY + t.phases.intro + t.phases.scrub + t.phases.land) * 1000;
+      const total =
+        (PREVIEW_LATENCY + t.phases.intro + t.phases.scrub + t.phases.land) *
+        1000;
       endTimer.current = window.setTimeout(() => setTransition(null), total);
     },
     [readout],
@@ -46,9 +57,14 @@ export function App() {
       try {
         const res = await action();
         if (!res.ok) toast.show(res.error ?? 'That didn’t work.');
-        else if (res.clamped && res.delay) toast.show(`Only ${clock(res.delay, false)} recorded so far — using that.`);
+        else if (res.clamped && res.delay)
+          toast.show(
+            `Only ${clock(res.delay, false)} recorded so far — using that.`,
+          );
       } catch (err) {
-        toast.show(err instanceof Error ? err.message : 'Lost connection to nicedelay.');
+        toast.show(
+          err instanceof Error ? err.message : 'Lost connection to nicedelay.',
+        );
       }
     },
     [toast],
@@ -71,7 +87,11 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (settingsOpen || e.metaKey || e.ctrlKey || e.altKey) return;
       const el = e.target as HTMLElement;
-      if (el.closest('input, select, textarea, button, [contenteditable]') && e.key !== 'l') return;
+      if (
+        el.closest('input, select, textarea, button, [contenteditable]') &&
+        e.key !== 'l'
+      )
+        return;
       if (e.key === ' ') {
         e.preventDefault();
         toggle();
@@ -90,13 +110,22 @@ export function App() {
           <Logo />
           nicedelay
         </div>
-        <button className="icon-button" onClick={() => setSettingsOpen(true)} aria-label="Settings" title="Settings">
+        <button
+          className="icon-button"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Settings"
+          title="Settings"
+        >
           <GearIcon />
         </button>
       </header>
 
       <main className="main">
-        <Preview running={!!state?.playout.output.running} mode={mode} transition={transition} />
+        <Preview
+          running={!!state?.playout.output.running}
+          mode={mode}
+          transition={transition}
+        />
         <section className="controls">
           <Hero
             state={state}
@@ -109,13 +138,20 @@ export function App() {
         </section>
       </main>
 
-      <StatusLine state={state} online={online} onOpenSettings={() => setSettingsOpen(true)} />
+      <StatusLine
+        state={state}
+        online={online}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
       <Settings
         open={settingsOpen}
         state={state}
         onClose={() => setSettingsOpen(false)}
         onSaved={(restart) =>
-          restart && toast.show('Saved. Quality and connection changes apply when your stream ends.')
+          restart &&
+          toast.show(
+            'Saved. Quality and connection changes apply when your stream ends.',
+          )
         }
       />
       <Toast message={toast.message} />

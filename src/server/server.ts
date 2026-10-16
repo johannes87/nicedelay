@@ -2,13 +2,23 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { styleText } from 'node:util';
-import { type Config, errorMessage, loadConfig, saveConfig, validate } from './config.ts';
+import {
+  type Config,
+  errorMessage,
+  loadConfig,
+  saveConfig,
+  validate,
+} from './config.ts';
 import { BufferStore } from './media/buffer.ts';
 import { pickEncoder } from './media/encoder.ts';
 import { FFMPEG, hasEncoder } from './media/ffmpeg.ts';
 import { Ingest } from './media/ingest.ts';
 import { Playout } from './playout.ts';
-import type { AppState, CommandResult, ConfigResponse } from '../shared/types.ts';
+import type {
+  AppState,
+  CommandResult,
+  ConfigResponse,
+} from '../shared/types.ts';
 
 const WEB_ROOT = path.resolve(import.meta.dirname, '../..', 'dist', 'web');
 const MIME: Record<string, string> = {
@@ -42,19 +52,30 @@ class App {
 
   private build(): void {
     const c = this.config;
-    this.store = new BufferStore({ fps: c.output.fps, bufferSeconds: c.bufferMinutes * 60 });
+    this.store = new BufferStore({
+      fps: c.output.fps,
+      bufferSeconds: c.bufferMinutes * 60,
+    });
     this.ingest = new Ingest({ config: c, store: this.store });
-    this.playout = new Playout({ config: c, store: this.store, ingest: this.ingest });
+    this.playout = new Playout({
+      config: c,
+      store: this.store,
+      ingest: this.ingest,
+    });
     this.ingest.on('connected', () => {
       const info = this.ingest.info;
-      const details = info ? ` (${info.codec} ${info.width}x${info.height} ${info.fps}fps)` : '';
+      const details = info
+        ? ` (${info.codec} ${info.width}x${info.height} ${info.fps}fps)`
+        : '';
       log('green', `OBS connected${details}`);
       this.broadcastState(true);
     });
     this.ingest.on('disconnected', () => {
       log(
         'yellow',
-        this.ingest.endedByObs ? 'OBS stopped streaming' : 'OBS disconnected (waiting for it to reconnect)',
+        this.ingest.endedByObs
+          ? 'OBS stopped streaming'
+          : 'OBS disconnected (waiting for it to reconnect)',
       );
       this.broadcastState(true);
     });
@@ -72,7 +93,8 @@ class App {
 
   /** Apply structural settings once nothing is streaming. */
   private applyPending(): void {
-    if (!this.pending || this.playout.mode !== 'idle' || this.ingest.connected) return;
+    if (!this.pending || this.playout.mode !== 'idle' || this.ingest.connected)
+      return;
     log('cyan', 'applying new output/ingest settings');
     this.ingest.stop();
     this.ingest.removeAllListeners();
@@ -86,16 +108,22 @@ class App {
   private updateConfig(body: Record<string, unknown>): ConfigResponse {
     const next = validate({ ...this.config, ...body });
     saveConfig(next);
-    const structural = STRUCTURAL.some((k) => JSON.stringify(next[k]) !== JSON.stringify(this.config[k]));
+    const structural = STRUCTURAL.some(
+      (k) => JSON.stringify(next[k]) !== JSON.stringify(this.config[k]),
+    );
     // Everything else is read live from the shared config object.
     for (const k of Object.keys(next) as (keyof Config)[]) {
-      if (!(STRUCTURAL as readonly string[]).includes(k)) Object.assign(this.config, { [k]: next[k] });
+      if (!(STRUCTURAL as readonly string[]).includes(k))
+        Object.assign(this.config, { [k]: next[k] });
     }
     this.store.bufferSeconds = next.bufferMinutes * 60;
     this.pending = structural ? next : null;
     this.applyPending();
     this.broadcastState(true);
-    return { config: this.pending ?? this.config, restartPending: !!this.pending };
+    return {
+      config: this.pending ?? this.config,
+      restartPending: !!this.pending,
+    };
   }
 
   private state(): AppState {
@@ -107,7 +135,10 @@ class App {
         key: c.ingest.key,
         info: this.ingest.connected ? this.ingest.info : null,
       },
-      buffer: { recorded: Math.floor(this.store.recorded), capacity: c.bufferMinutes * 60 },
+      buffer: {
+        recorded: Math.floor(this.store.recorded),
+        capacity: c.bufferMinutes * 60,
+      },
       playout: this.playout.state(),
       delaySeconds: c.delaySeconds,
       restartPending: !!this.pending,
@@ -125,13 +156,16 @@ class App {
     const json = JSON.stringify(this.state());
     if (!force && json === this.lastState) return;
     this.lastState = json;
-    for (const res of this.sseClients) res.write(`event: state\ndata: ${json}\n\n`);
+    for (const res of this.sseClients)
+      res.write(`event: state\ndata: ${json}\n\n`);
   }
 
   private sendPreview(jpeg: Buffer): void {
     for (const res of this.previewClients) {
       if (res.writableLength > 1_000_000) continue; // slow client: skip frames
-      res.write(`--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`);
+      res.write(
+        `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${jpeg.length}\r\n\r\n`,
+      );
       res.write(jpeg);
       res.write('\r\n');
     }
@@ -139,27 +173,48 @@ class App {
 
   // ------------------------------------------------------------ http
 
-  private readonly routes: { method: string; pattern: URLPattern; fn: Handler }[] = (
+  private readonly routes: {
+    method: string;
+    pattern: URLPattern;
+    fn: Handler;
+  }[] = (
     [
       ['GET', '/api/state', () => this.state()],
-      ['POST', '/api/delay', (b) => this.command(this.playout.setDelay(b.seconds ?? this.config.delaySeconds))],
+      [
+        'POST',
+        '/api/delay',
+        (b) =>
+          this.command(
+            this.playout.setDelay(b.seconds ?? this.config.delaySeconds),
+          ),
+      ],
       ['POST', '/api/live', () => this.command(this.playout.goLive())],
       ['POST', '/api/toggle', () => this.command(this.playout.toggle())],
       [
         'GET',
         '/api/config',
-        (): ConfigResponse => ({ config: this.pending ?? this.config, restartPending: !!this.pending }),
+        (): ConfigResponse => ({
+          config: this.pending ?? this.config,
+          restartPending: !!this.pending,
+        }),
       ],
       ['PUT', '/api/config', (b) => this.updateConfig(b)],
     ] satisfies [string, string, Handler][]
-  ).map(([method, pathname, fn]) => ({ method, pattern: new URLPattern({ pathname }), fn }));
+  ).map(([method, pathname, fn]) => ({
+    method,
+    pattern: new URLPattern({ pathname }),
+    fn,
+  }));
 
   private command(result: CommandResult): CommandResult {
     this.broadcastState(true);
     return result;
   }
 
-  async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  async handle(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): Promise<void> {
     const url = new URL(req.url ?? '/', 'http://localhost');
     try {
       if (url.pathname === '/api/events') return this.openEvents(req, res);
@@ -170,9 +225,14 @@ class App {
         if (!route) return send(res, 405, { error: 'method not allowed' });
         const body = req.method === 'GET' ? {} : await readJson(req);
         const result = route.fn(body);
-        return send(res, (result as CommandResult | undefined)?.ok === false ? 409 : 200, result);
+        return send(
+          res,
+          (result as CommandResult | undefined)?.ok === false ? 409 : 200,
+          result,
+        );
       }
-      if (req.method === 'GET' || req.method === 'HEAD') return serveStatic(url.pathname, res);
+      if (req.method === 'GET' || req.method === 'HEAD')
+        return serveStatic(url.pathname, res);
       send(res, 404, { error: 'not found' });
     } catch (err) {
       console.error(err);
@@ -180,14 +240,26 @@ class App {
     }
   }
 
-  private openEvents(req: http.IncomingMessage, res: http.ServerResponse): void {
-    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-    res.write(`retry: 1000\nevent: state\ndata: ${JSON.stringify(this.state())}\n\n`);
+  private openEvents(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): void {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+    });
+    res.write(
+      `retry: 1000\nevent: state\ndata: ${JSON.stringify(this.state())}\n\n`,
+    );
     this.sseClients.add(res);
     req.on('close', () => this.sseClients.delete(res));
   }
 
-  private openPreview(req: http.IncomingMessage, res: http.ServerResponse): void {
+  private openPreview(
+    req: http.IncomingMessage,
+    res: http.ServerResponse,
+  ): void {
     res.writeHead(200, {
       'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
       'Cache-Control': 'no-cache, no-store',
@@ -237,11 +309,16 @@ function log(color: Parameters<typeof styleText>[0], msg: string): void {
 }
 
 function send(res: http.ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+  res.writeHead(status, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+  });
   res.end(JSON.stringify(body ?? {}));
 }
 
-async function readJson(req: http.IncomingMessage): Promise<Record<string, unknown>> {
+async function readJson(
+  req: http.IncomingMessage,
+): Promise<Record<string, unknown>> {
   let raw = '';
   for await (const chunk of req) {
     raw += String(chunk);
@@ -249,16 +326,22 @@ async function readJson(req: http.IncomingMessage): Promise<Record<string, unkno
   }
   try {
     const parsed: unknown = raw.trim() ? JSON.parse(raw) : {};
-    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, unknown>)
+      : {};
   } catch {
     return {};
   }
 }
 
 function serveStatic(pathname: string, res: http.ServerResponse): void {
-  const rel = pathname === '/' ? 'index.html' : decodeURIComponent(pathname).replace(/^\/+/, '');
+  const rel =
+    pathname === '/'
+      ? 'index.html'
+      : decodeURIComponent(pathname).replace(/^\/+/, '');
   const file = path.resolve(WEB_ROOT, rel);
-  if (!file.startsWith(WEB_ROOT + path.sep)) return send(res, 403, { error: 'forbidden' });
+  if (!file.startsWith(WEB_ROOT + path.sep))
+    return send(res, 403, { error: 'forbidden' });
   fs.readFile(file, (err, data) => {
     if (err) {
       if (rel === 'index.html') {
@@ -271,14 +354,18 @@ function serveStatic(pathname: string, res: http.ServerResponse): void {
     const immutable = rel.startsWith('assets/');
     res.writeHead(200, {
       'Content-Type': MIME[path.extname(file)] ?? 'application/octet-stream',
-      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+      'Cache-Control': immutable
+        ? 'public, max-age=31536000, immutable'
+        : 'no-cache',
     });
     res.end(data);
   });
 }
 
 if (!hasEncoder('aac')) {
-  console.error(`ffmpeg not found or unusable (${FFMPEG}). Install it, e.g. \`brew install ffmpeg\`.`);
+  console.error(
+    `ffmpeg not found or unusable (${FFMPEG}). Install it, e.g. \`brew install ffmpeg\`.`,
+  );
   process.exit(1);
 }
 

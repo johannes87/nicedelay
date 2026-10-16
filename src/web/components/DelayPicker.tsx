@@ -12,7 +12,9 @@ export function DelayPicker({
   const capacity = state?.buffer.capacity ?? 600;
   const options = OPTIONS.filter((s) => s <= capacity - 2);
   const delayed = state?.playout.mode === 'delayed';
-  const selected = delayed ? state.playout.targetDelay : (state?.delaySeconds ?? 10);
+  const selected = delayed
+    ? state.playout.targetDelay
+    : (state?.delaySeconds ?? 10);
 
   return (
     <div className="picker">

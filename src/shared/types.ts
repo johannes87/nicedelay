@@ -70,7 +70,12 @@ export interface PlayoutState {
   targetDelay: number;
   effectiveDelay: number;
   maxDelay: number;
-  transition: { kind: TransitionKind; from: number; to: number; progress: number } | null;
+  transition: {
+    kind: TransitionKind;
+    from: number;
+    to: number;
+    progress: number;
+  } | null;
   output: {
     running: boolean;
     codec: string | null;
@@ -84,7 +89,12 @@ export interface PlayoutState {
 }
 
 export interface AppState {
-  ingest: { connected: boolean; server: string; key: string; info: IngestInfo | null };
+  ingest: {
+    connected: boolean;
+    server: string;
+    key: string;
+    info: IngestInfo | null;
+  };
   buffer: { recorded: number; capacity: number };
   playout: PlayoutState;
   delaySeconds: number;

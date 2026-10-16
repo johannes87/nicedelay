@@ -3,7 +3,10 @@ import { type AppState, api, type Config, type Destination } from '../api.ts';
 
 const SERVICES = [
   // Secure (RTMPS) ingest, so stream keys never cross the network in clear text.
-  { name: 'Twitch', url: 'rtmps://ingest.global-contribute.live-video.net/app' },
+  {
+    name: 'Twitch',
+    url: 'rtmps://ingest.global-contribute.live-video.net/app',
+  },
   { name: 'YouTube', url: 'rtmps://a.rtmps.youtube.com/live2' },
 ] as const;
 
@@ -54,7 +57,8 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
     }
   }, [open, onClose]);
 
-  const set = (patch: Partial<Config>) => setDraft((d) => (d ? { ...d, ...patch } : d));
+  const set = (patch: Partial<Config>) =>
+    setDraft((d) => (d ? { ...d, ...patch } : d));
   // Edited rows keep their React key so inputs don't lose focus.
   const setDest = (i: number, patch: Partial<Destination>) =>
     setDraft(
@@ -89,20 +93,32 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
           Cancel
         </button>
         <h2>Settings</h2>
-        <button className="text-button strong" onClick={() => void save()} disabled={!draft || saving}>
+        <button
+          className="text-button strong"
+          onClick={() => void save()}
+          disabled={!draft || saving}
+        >
           Done
         </button>
       </div>
 
       {draft && (
         <div className="sheet-body">
-          <Group title="Connect OBS" note="In OBS, open Settings → Stream, choose Custom, and paste these.">
+          <Group
+            title="Connect OBS"
+            note="In OBS, open Settings → Stream, choose Custom, and paste these."
+          >
             <CopyRow label="Server" value={state?.ingest.server ?? ''} />
             <CopyRow label="Stream key" value={draft.ingest.key} />
           </Group>
 
-          <Group title="Stream to" note="nicedelay sends the delayed stream here — instead of OBS.">
-            {draft.destinations.length === 0 && <p className="empty">No destinations yet.</p>}
+          <Group
+            title="Stream to"
+            note="nicedelay sends the delayed stream here — instead of OBS."
+          >
+            {draft.destinations.length === 0 && (
+              <p className="empty">No destinations yet.</p>
+            )}
             {draft.destinations.map((d, i) => {
               const known = SERVICES.find((s) => s.url === d.url);
               return (
@@ -135,7 +151,13 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
                   <button
                     className="remove"
                     aria-label="Remove"
-                    onClick={() => set({ destinations: draft.destinations.filter((_, j) => j !== i) })}
+                    onClick={() =>
+                      set({
+                        destinations: draft.destinations.filter(
+                          (_, j) => j !== i,
+                        ),
+                      })
+                    }
                   >
                     ×
                   </button>
@@ -148,7 +170,12 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
                   key={s.name}
                   className="pill-button"
                   onClick={() =>
-                    set({ destinations: [...draft.destinations, { name: s.name, url: s.url, key: '', enabled: true }] })
+                    set({
+                      destinations: [
+                        ...draft.destinations,
+                        { name: s.name, url: s.url, key: '', enabled: true },
+                      ],
+                    })
                   }
                 >
                   + {s.name}
@@ -157,7 +184,12 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
               <button
                 className="pill-button"
                 onClick={() =>
-                  set({ destinations: [...draft.destinations, { name: '', url: '', key: '', enabled: true }] })
+                  set({
+                    destinations: [
+                      ...draft.destinations,
+                      { name: '', url: '', key: '', enabled: true },
+                    ],
+                  })
                 }
               >
                 + Other
@@ -169,10 +201,21 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
             <Row label="Resolution">
               <Choice
                 options={RESOLUTIONS.map((r) => r.label)}
-                value={RESOLUTIONS.find((r) => r.height === draft.output.height)?.label ?? '1080p'}
+                value={
+                  RESOLUTIONS.find((r) => r.height === draft.output.height)
+                    ?.label ?? '1080p'
+                }
                 onChange={(label) => {
-                  const r = RESOLUTIONS.find((x) => x.label === label) ?? RESOLUTIONS[1];
-                  set({ output: { ...draft.output, width: r.width, height: r.height } });
+                  const r =
+                    RESOLUTIONS.find((x) => x.label === label) ??
+                    RESOLUTIONS[1];
+                  set({
+                    output: {
+                      ...draft.output,
+                      width: r.width,
+                      height: r.height,
+                    },
+                  });
                 }}
               />
             </Row>
@@ -180,7 +223,9 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
               <Choice
                 options={['30', '60']}
                 value={String(draft.output.fps)}
-                onChange={(fps) => set({ output: { ...draft.output, fps: Number(fps) } })}
+                onChange={(fps) =>
+                  set({ output: { ...draft.output, fps: Number(fps) } })
+                }
               />
             </Row>
             <Row label="Bitrate">
@@ -191,7 +236,14 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
                   max={50000}
                   step={500}
                   value={draft.output.videoBitrate}
-                  onChange={(e) => set({ output: { ...draft.output, videoBitrate: Number(e.target.value) } })}
+                  onChange={(e) =>
+                    set({
+                      output: {
+                        ...draft.output,
+                        videoBitrate: Number(e.target.value),
+                      },
+                    })
+                  }
                 />
                 kbps
               </span>
@@ -215,7 +267,9 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
             <Row label="Rewind sound">
               <Switch
                 checked={draft.transition.sound}
-                onChange={(sound) => set({ transition: { ...draft.transition, sound } })}
+                onChange={(sound) =>
+                  set({ transition: { ...draft.transition, sound } })
+                }
                 label="Rewind sound"
               />
             </Row>
@@ -226,7 +280,11 @@ export function Settings({ open, state, onClose, onSaved }: Props) {
   );
 }
 
-function Group({ title, note, children }: Readonly<{ title: string; note?: string; children: React.ReactNode }>) {
+function Group({
+  title,
+  note,
+  children,
+}: Readonly<{ title: string; note?: string; children: React.ReactNode }>) {
   return (
     <section className="group">
       <h3>{title}</h3>
@@ -236,7 +294,10 @@ function Group({ title, note, children }: Readonly<{ title: string; note?: strin
   );
 }
 
-function Row({ label, children }: Readonly<{ label: string; children: React.ReactNode }>) {
+function Row({
+  label,
+  children,
+}: Readonly<{ label: string; children: React.ReactNode }>) {
   return (
     <div className="row">
       <span className="row-label">{label}</span>
@@ -270,7 +331,11 @@ function Switch({
   checked,
   onChange,
   label,
-}: Readonly<{ checked: boolean; onChange: (v: boolean) => void; label: string }>) {
+}: Readonly<{
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}>) {
   return (
     <button
       role="switch"
@@ -288,11 +353,20 @@ function Choice({
   options,
   value,
   onChange,
-}: Readonly<{ options: string[]; value: string; onChange: (v: string) => void }>) {
+}: Readonly<{
+  options: string[];
+  value: string;
+  onChange: (v: string) => void;
+}>) {
   return (
     <div className="choice" role="radiogroup">
       {options.map((o) => (
-        <button key={o} role="radio" aria-checked={o === value} onClick={() => onChange(o)}>
+        <button
+          key={o}
+          role="radio"
+          aria-checked={o === value}
+          onClick={() => onChange(o)}
+        >
           {o}
         </button>
       ))}

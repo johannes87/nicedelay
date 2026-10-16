@@ -37,7 +37,9 @@ export function Preview({ running, mode, transition }: Props) {
           key={attempt}
           src={`/preview.mjpg?${attempt}`}
           alt="Output preview"
-          onError={() => window.setTimeout(() => setAttempt((a) => a + 1), 1000)}
+          onError={() =>
+            window.setTimeout(() => setAttempt((a) => a + 1), 1000)
+          }
         />
       ) : (
         <div className="preview-empty">
@@ -45,7 +47,9 @@ export function Preview({ running, mode, transition }: Props) {
             <rect x="2.5" y="5" width="14" height="14" rx="3" />
             <path d="M16.5 10.5 21.5 7v10l-5-3.5" />
           </svg>
-          <span>{mode === 'idle' ? 'Your stream will appear here' : 'Starting…'}</span>
+          <span>
+            {mode === 'idle' ? 'Your stream will appear here' : 'Starting…'}
+          </span>
         </div>
       )}
     </motion.div>

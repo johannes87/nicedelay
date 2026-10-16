@@ -4,7 +4,10 @@ import net from 'node:net';
 // "deleteStream" before closing the connection; a crash or network drop just closes it.
 // Commands are AMF0 strings on the wire: 0x02, a 16-bit length, then the name.
 const MARKERS = ['FCUnpublish', 'deleteStream'].map((name) =>
-  Buffer.concat([Buffer.from([0x02, 0x00, name.length]), Buffer.from(name, 'ascii')]),
+  Buffer.concat([
+    Buffer.from([0x02, 0x00, name.length]),
+    Buffer.from(name, 'ascii'),
+  ]),
 );
 const KEEP = Math.max(...MARKERS.map((m) => m.length)) - 1;
 

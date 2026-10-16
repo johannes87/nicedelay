@@ -27,7 +27,8 @@ export function StatusLine({ state, online, onOpenSettings }: Props) {
   const out = playout.output;
 
   let destination: React.ReactNode;
-  if (out.error && out.running) destination = <Item tone="bad">{out.error}</Item>;
+  if (out.error && out.running)
+    destination = <Item tone="bad">{out.error}</Item>;
   else if (out.running && out.previewOnly)
     destination = (
       <Item tone="warn">
@@ -37,7 +38,10 @@ export function StatusLine({ state, online, onOpenSettings }: Props) {
         </button>
       </Item>
     );
-  else if (out.running) destination = <Item tone="good">Streaming to {out.destinations.join(', ')}</Item>;
+  else if (out.running)
+    destination = (
+      <Item tone="good">Streaming to {out.destinations.join(', ')}</Item>
+    );
 
   return (
     <footer className="status">
@@ -45,14 +49,21 @@ export function StatusLine({ state, online, onOpenSettings }: Props) {
       {destination}
       {buffer.recorded > 0 && (
         <Item>
-          {clock(buffer.recorded, false)} of {clock(buffer.capacity, false)} recorded
+          {clock(buffer.recorded, false)} of {clock(buffer.capacity, false)}{' '}
+          recorded
         </Item>
       )}
     </footer>
   );
 }
 
-function Item({ tone, children }: Readonly<{ tone?: 'good' | 'warn' | 'bad' | 'idle'; children: React.ReactNode }>) {
+function Item({
+  tone,
+  children,
+}: Readonly<{
+  tone?: 'good' | 'warn' | 'bad' | 'idle';
+  children: React.ReactNode;
+}>) {
   return (
     <span className="status-item">
       {tone && <i className={`status-dot ${tone}`} />}

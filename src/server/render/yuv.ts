@@ -84,7 +84,12 @@ export interface Tone {
 function toneCoeffs({ luma = 1, sat = 1 }: Tone) {
   const ly = Math.round(luma * 256);
   const cs = Math.round(sat * 256);
-  return { ly, ay: Math.round(16 * (256 - ly)), cs, ac: Math.round(128 * (256 - cs)) };
+  return {
+    ly,
+    ay: Math.round(16 * (256 - ly)),
+    cs,
+    ac: Math.round(128 * (256 - cs)),
+  };
 }
 
 export function scaleFrame(
@@ -104,7 +109,13 @@ export function scaleFrame(
   scalePlane(src, s.v, sw / 2, sh / 2, dst, d.v, dw / 2, dh / 2, cs, ac + 128);
 }
 
-export function toneFrame(src: Buffer, dst: Buffer, w: number, h: number, tone: Tone = {}): void {
+export function toneFrame(
+  src: Buffer,
+  dst: Buffer,
+  w: number,
+  h: number,
+  tone: Tone = {},
+): void {
   const { ys, cs: csize } = planeOffsets(w, h);
   const { ly, ay, cs, ac } = toneCoeffs(tone);
   if (ly === 256 && cs === 256) {
@@ -149,7 +160,14 @@ export function rng(seed: number): () => number {
  * VHS-style tape artifacts: horizontally displaced bands, a rolling noise bar and
  * scanlines. `strength` 0..1, `seed` changes the pattern per frame.
  */
-export function tapeEffect(buf: Buffer, w: number, h: number, strength: number, seed: number, rollPos: number): void {
+export function tapeEffect(
+  buf: Buffer,
+  w: number,
+  h: number,
+  strength: number,
+  seed: number,
+  rollPos: number,
+): void {
   if (strength <= 0) return;
   const rand = rng(seed);
   displaceBands(buf, w, h, strength, rand);
@@ -158,7 +176,13 @@ export function tapeEffect(buf: Buffer, w: number, h: number, strength: number, 
 }
 
 /** A few horizontal bands of the picture shifted sideways. */
-function displaceBands(buf: Buffer, w: number, h: number, strength: number, rand: () => number): void {
+function displaceBands(
+  buf: Buffer,
+  w: number,
+  h: number,
+  strength: number,
+  rand: () => number,
+): void {
   const { u, v } = planeOffsets(w, h);
   const cw = w / 2;
   const bands = 2 + Math.floor(rand() * 3);
@@ -176,7 +200,14 @@ function displaceBands(buf: Buffer, w: number, h: number, strength: number, rand
 }
 
 /** A noisy, jittering bar rolling down the picture (`rollPos` 0..1). */
-function trackingNoise(buf: Buffer, w: number, h: number, strength: number, rand: () => number, rollPos: number): void {
+function trackingNoise(
+  buf: Buffer,
+  w: number,
+  h: number,
+  strength: number,
+  rand: () => number,
+  rollPos: number,
+): void {
   const barH = Math.floor(h * 0.07);
   const barY = Math.floor(rollPos * (h + barH)) - barH;
   const amp = 90 * strength;
@@ -187,7 +218,10 @@ function trackingNoise(buf: Buffer, w: number, h: number, strength: number, rand
     const shift = Math.round((rand() - 0.5) * 16 * strength * edge);
     if (shift) shiftRow(buf, o, w, shift);
     for (let x = 0; x < w; x++, o++) {
-      buf[o] = Math.min(235, Math.max(16, buf[o] + (rand() - 0.5) * k * 2 + k * 0.3));
+      buf[o] = Math.min(
+        235,
+        Math.max(16, buf[o] + (rand() - 0.5) * k * 2 + k * 0.3),
+      );
     }
   }
 }
@@ -252,14 +286,19 @@ export function blendRGBA(
   blendChroma(buf, w, h, area);
 }
 
-function blendLuma(buf: Buffer, w: number, { rgba, rw, x0, y0, xa, ya, xb, yb, op }: BlendArea): void {
+function blendLuma(
+  buf: Buffer,
+  w: number,
+  { rgba, rw, x0, y0, xa, ya, xb, yb, op }: BlendArea,
+): void {
   for (let y = ya; y < yb; y++) {
     let si = (y * rw + xa) * 4;
     let di = (y0 + y) * w + x0 + xa;
     for (let x = xa; x < xb; x++, si += 4, di++) {
       const a = (rgba[si + 3] * op) >> 8;
       if (!a) continue;
-      const yy = 16 + ((rgba[si] * 47 + rgba[si + 1] * 157 + rgba[si + 2] * 16) >> 8);
+      const yy =
+        16 + ((rgba[si] * 47 + rgba[si + 1] * 157 + rgba[si + 2] * 16) >> 8);
       const d = buf[di];
       buf[di] = d + ((((yy - d) * a + 127) / 255) | 0);
     }
@@ -291,8 +330,10 @@ function blendChroma(buf: Buffer, w: number, h: number, area: BlendArea): void {
       const b = sb / sa;
       const a = (((sa >> 2) * op) >> 8) / 255;
       const ci = ((y0 + y) >> 1) * cw + ((x0 + x) >> 1);
-      buf[u + ci] += (128 + (-0.1006 * r - 0.3386 * g + 0.4392 * b) - buf[u + ci]) * a;
-      buf[v + ci] += (128 + (0.4392 * r - 0.3989 * g - 0.0403 * b) - buf[v + ci]) * a;
+      buf[u + ci] +=
+        (128 + (-0.1006 * r - 0.3386 * g + 0.4392 * b) - buf[u + ci]) * a;
+      buf[v + ci] +=
+        (128 + (0.4392 * r - 0.3989 * g - 0.0403 * b) - buf[v + ci]) * a;
     }
   }
 }

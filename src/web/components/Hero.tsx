@@ -1,4 +1,9 @@
-import { AnimatePresence, motion, type MotionValue, useTransform } from 'motion/react';
+import {
+  AnimatePresence,
+  motion,
+  type MotionValue,
+  useTransform,
+} from 'motion/react';
 import type { AppState, TransitionEvent } from '../api.ts';
 import { clock, short, spoken } from '../format.ts';
 
@@ -20,7 +25,10 @@ type Props = Readonly<{
 type Mode = AppState['playout']['mode'];
 
 /** Which big readout to show: off air, the pulsing LIVE, or the delay counter. */
-function readoutKind(mode: Mode, transition: TransitionEvent | null): 'off' | 'live' | 'number' {
+function readoutKind(
+  mode: Mode,
+  transition: TransitionEvent | null,
+): 'off' | 'live' | 'number' {
   if (mode === 'idle') return 'off';
   return mode === 'delayed' || transition ? 'number' : 'live';
 }
@@ -30,13 +38,18 @@ function transitionCaption(t: TransitionEvent): string {
   return t.to === 0 ? 'Catching up to live…' : 'Skipping ahead…';
 }
 
-function statusCaption(state: AppState | null, transition: TransitionEvent | null): string {
+function statusCaption(
+  state: AppState | null,
+  transition: TransitionEvent | null,
+): string {
   const mode = state?.playout.mode ?? 'idle';
   const nextDelay = state?.delaySeconds ?? 10;
   const recorded = state?.buffer.recorded ?? 0;
   if (transition) return transitionCaption(transition);
-  if (mode === 'delayed') return `Viewers see everything ${spoken(state?.playout.targetDelay ?? 0)} later.`;
-  if (recorded < nextDelay) return `Recording… ${short(recorded)} of ${short(nextDelay)} ready.`;
+  if (mode === 'delayed')
+    return `Viewers see everything ${spoken(state?.playout.targetDelay ?? 0)} later.`;
+  if (recorded < nextDelay)
+    return `Recording… ${short(recorded)} of ${short(nextDelay)} ready.`;
   return 'Viewers see you in real time.';
 }
 
@@ -48,7 +61,8 @@ function buttonLabel(mode: Mode, nextDelay: number): string {
 /** How the stream ends, shown while on air. */
 function endHint(state: AppState | null): string | null {
   if (!state || state.playout.mode === 'idle') return null;
-  if (!state.ingest.connected) return 'OBS stopped. The stream ends automatically.';
+  if (!state.ingest.connected)
+    return 'OBS stopped. The stream ends automatically.';
   return 'To end the stream, stop streaming in OBS.';
 }
 
@@ -129,7 +143,11 @@ export function Hero({ state, readout, transition, onToggle, onSetup }: Props) {
       >
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.span key={label} className="primary-label" {...swap}>
-            {interactive && <TransportIcon direction={action === 'live' ? 'forward' : 'back'} />}
+            {interactive && (
+              <TransportIcon
+                direction={action === 'live' ? 'forward' : 'back'}
+              />
+            )}
             {label}
           </motion.span>
         </AnimatePresence>
@@ -159,10 +177,16 @@ function EndHint({ text }: Readonly<{ text: string | null }>) {
   );
 }
 
-function TransportIcon({ direction }: Readonly<{ direction: 'back' | 'forward' }>) {
+function TransportIcon({
+  direction,
+}: Readonly<{ direction: 'back' | 'forward' }>) {
   return (
     <svg viewBox="0 0 24 16" className="transport" aria-hidden="true">
-      {direction === 'back' ? <path d="M11 1v14L2 8zM22 1v14l-9-7z" /> : <path d="M2 1v14l9-7zM13 1v14l9-7z" />}
+      {direction === 'back' ? (
+        <path d="M11 1v14L2 8zM22 1v14l-9-7z" />
+      ) : (
+        <path d="M2 1v14l9-7zM13 1v14l9-7z" />
+      )}
     </svg>
   );
 }

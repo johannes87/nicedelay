@@ -4,7 +4,11 @@ import { rng } from './yuv.ts';
 // Synthesized tape-transport whoosh: band-passed noise plus a buzzy chirp whose pitch
 // falls for rewind and rises for fast-forward, panned in the direction of travel.
 // Returns s16le stereo PCM.
-export function tapeWhoosh(kind: 'rewind' | 'forward', seconds: number, volume = 0.6): Buffer {
+export function tapeWhoosh(
+  kind: 'rewind' | 'forward',
+  seconds: number,
+  volume = 0.6,
+): Buffer {
   const n = Math.round(seconds * AUDIO_RATE);
   const out = Buffer.alloc(n * 4);
   const rand = rng(kind === 'rewind' ? 7 : 11);
@@ -66,7 +70,12 @@ function clamp16(v: number): number {
 }
 
 /** Mix s16le stereo `src` (from byte offset `srcOff`) into `dst`, with gain applied to dst first. */
-export function mixInto(dst: Buffer, dstGain: number, src: Buffer | null, srcOff: number): void {
+export function mixInto(
+  dst: Buffer,
+  dstGain: number,
+  src: Buffer | null,
+  srcOff: number,
+): void {
   for (let i = 0; i < dst.length; i += 2) {
     let v = dst.readInt16LE(i) * dstGain;
     const j = srcOff + i;

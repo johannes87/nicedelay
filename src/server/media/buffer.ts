@@ -51,7 +51,15 @@ export class BufferStore {
   thumbs: Thumb[] = [];
   private nextSessionId = 1;
 
-  constructor({ fps, bufferSeconds, root }: { fps: number; bufferSeconds: number; root?: string }) {
+  constructor({
+    fps,
+    bufferSeconds,
+    root,
+  }: {
+    fps: number;
+    bufferSeconds: number;
+    root?: string;
+  }) {
     this.fps = fps;
     this.bufferSeconds = bufferSeconds;
     this.root = root ?? path.join(os.tmpdir(), 'nicedelay-buffer');
@@ -85,7 +93,8 @@ export class BufferStore {
   }
 
   discard(session: Session): void {
-    if (!this.sessions.includes(session)) fs.rm(session.dir, { recursive: true, force: true }, () => {});
+    if (!this.sessions.includes(session))
+      fs.rm(session.dir, { recursive: true, force: true }, () => {});
   }
 
   segmentPath(session: Session, index: number): string {
@@ -133,7 +142,12 @@ export class BufferStore {
       for (let j = s.segments.length - 1; j >= 0; j--) {
         const seg = s.segments[j];
         if (seg.start <= local || j === 0) {
-          return { session: s, index: seg.index, start: seg.start, offset: Math.max(0, local - seg.start) };
+          return {
+            session: s,
+            index: seg.index,
+            start: seg.start,
+            offset: Math.max(0, local - seg.start),
+          };
         }
       }
     }
@@ -166,7 +180,10 @@ export class BufferStore {
 
   /** Drop everything older than the buffer window, but never what a reader still needs. */
   trim(protectFrom = Infinity): void {
-    const cutoff = Math.min(this.liveEdge - this.bufferSeconds - 5, protectFrom - 5);
+    const cutoff = Math.min(
+      this.liveEdge - this.bufferSeconds - 5,
+      protectFrom - 5,
+    );
     while (this.thumbs.length && this.thumbs[0].t < cutoff) this.thumbs.shift();
     for (const s of this.sessions) {
       while (s.segments.length && s.base + s.segments[0].end < cutoff) {
@@ -174,7 +191,11 @@ export class BufferStore {
         fs.rm(this.segmentPath(s, seg.index), { force: true }, () => {});
       }
     }
-    while (this.sessions.length > 1 && this.sessions[0].ended && !this.sessions[0].segments.length) {
+    while (
+      this.sessions.length > 1 &&
+      this.sessions[0].ended &&
+      !this.sessions[0].segments.length
+    ) {
       const s = this.sessions.shift()!;
       fs.rm(s.dir, { recursive: true, force: true }, () => {});
     }

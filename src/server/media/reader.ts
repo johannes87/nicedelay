@@ -42,7 +42,15 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
   private closed = false;
   private destroyed = false;
 
-  constructor({ store, config, t }: { store: BufferStore; config: Config; t: number }) {
+  constructor({
+    store,
+    config,
+    t,
+  }: {
+    store: BufferStore;
+    config: Config;
+    t: number;
+  }) {
     super();
     this.store = store;
     this.config = config;
@@ -64,7 +72,10 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
   }
 
   get ready(): boolean {
-    return this.queue.length > 0 && (this.queue.hasAudioForNext() || this.queue.length >= this.maxQueue - 1);
+    return (
+      this.queue.length > 0 &&
+      (this.queue.hasAudioForNext() || this.queue.length >= this.maxQueue - 1)
+    );
   }
 
   /** True once everything was decoded and consumed. */
@@ -77,9 +88,21 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
     const off = this.offset.toFixed(4);
     const args = [
       ['-loglevel', 'error'],
-      ['-f', 'mpegts', '-probesize', '2M', '-analyzeduration', '1M', '-i', 'pipe:0'],
+      [
+        '-f',
+        'mpegts',
+        '-probesize',
+        '2M',
+        '-analyzeduration',
+        '1M',
+        '-i',
+        'pipe:0',
+      ],
       ['-map', '0:v:0', '-f', 'rawvideo'],
-      ['-vf', `trim=start=${off},setpts=PTS-STARTPTS,fps=${fps}:start_time=0,${scaleChain(w, h)}`],
+      [
+        '-vf',
+        `trim=start=${off},setpts=PTS-STARTPTS,fps=${fps}:start_time=0,${scaleChain(w, h)}`,
+      ],
       ['pipe:1'],
       ['-map', '0:a:0', '-f', 's16le'],
       ['-af', `atrim=start=${off},asetpts=PTS-STARTPTS,${AUDIO_CHAIN}`],
@@ -99,11 +122,14 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
     proc.on('close', (code) => {
       this.closed = true;
       if (code && !this.destroyed)
-        console.warn(`[reader] decoder exited (${code}): ${this.stderr.slice(-3).join(' | ')}`);
+        console.warn(
+          `[reader] decoder exited (${code}): ${this.stderr.slice(-3).join(' | ')}`,
+        );
       this.emit('closed');
     });
     this.feed(proc).catch((err: unknown) => {
-      if (!this.destroyed) console.warn(`[reader] feed error: ${errorMessage(err)}`);
+      if (!this.destroyed)
+        console.warn(`[reader] feed error: ${errorMessage(err)}`);
       writablePipe(proc, 0).end();
     });
     return proc;
@@ -112,7 +138,11 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
   private async feed(proc: FfmpegProcess): Promise<void> {
     const stdin = writablePipe(proc, 0);
     const buf = Buffer.allocUnsafe(CHUNK);
-    for (let index = this.index; !this.destroyed && !this.isPastEnd(index); index++) {
+    for (
+      let index = this.index;
+      !this.destroyed && !this.isPastEnd(index);
+      index++
+    ) {
       await using fh = await this.openSegment(index);
       if (!fh) break;
       await this.tail(fh, index, stdin, buf);
@@ -142,7 +172,12 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
   }
 
   /** Streams one segment into the decoder, following it while it's still being written. */
-  private async tail(fh: fs.FileHandle, index: number, stdin: Writable, buf: Buffer): Promise<void> {
+  private async tail(
+    fh: fs.FileHandle,
+    index: number,
+    stdin: Writable,
+    buf: Buffer,
+  ): Promise<void> {
     let pos = 0;
     while (!this.destroyed) {
       // Snapshot before reading: if the segment was already finished, an empty read
@@ -151,7 +186,8 @@ export class BufferReader extends EventEmitter<{ closed: [] }> {
       const { bytesRead } = await fh.read(buf, 0, CHUNK, pos);
       if (bytesRead > 0) {
         pos += bytesRead;
-        if (!stdin.write(Buffer.from(buf.subarray(0, bytesRead)))) await drained(stdin);
+        if (!stdin.write(Buffer.from(buf.subarray(0, bytesRead))))
+          await drained(stdin);
       } else if (finished) {
         return;
       } else {

@@ -11,7 +11,8 @@ export function scaleChain(w: number, h: number): string {
   );
 }
 
-export const AUDIO_CHAIN = 'aresample=48000:async=1:first_pts=0,aformat=sample_fmts=s16:channel_layouts=stereo';
+export const AUDIO_CHAIN =
+  'aresample=48000:async=1:first_pts=0,aformat=sample_fmts=s16:channel_layouts=stereo';
 
 export interface FfmpegProcess extends ChildProcess {
   stdout: Readable;
@@ -21,11 +22,16 @@ export interface FfmpegProcess extends ChildProcess {
 /** Spawns ffmpeg with pipes on fds 1..fds-1 (fd 2 is stderr). */
 export function spawnFfmpeg(
   args: string[],
-  { fds = 3, stdin = 'ignore' }: { fds?: number; stdin?: 'ignore' | 'pipe' } = {},
+  {
+    fds = 3,
+    stdin = 'ignore',
+  }: { fds?: number; stdin?: 'ignore' | 'pipe' } = {},
 ): FfmpegProcess {
   const stdio: ('ignore' | 'pipe')[] = [stdin, 'pipe', 'pipe'];
   for (let i = 3; i < fds; i++) stdio.push('pipe');
-  const proc = spawn(FFMPEG, ['-hide_banner', '-nostdin', ...args], { stdio }) as FfmpegProcess;
+  const proc = spawn(FFMPEG, ['-hide_banner', '-nostdin', ...args], {
+    stdio,
+  }) as FfmpegProcess;
   // EPIPE and friends surface through 'close'; don't let them crash the process.
   for (const s of proc.stdio) s?.on('error', () => {});
   return proc;
@@ -40,7 +46,11 @@ export function writablePipe(proc: ChildProcess, fd: number): Writable {
 }
 
 /** Keeps the last few stderr lines for error reporting. */
-export function tailStderr(proc: FfmpegProcess, onLine?: (line: string) => void, keep = 20): string[] {
+export function tailStderr(
+  proc: FfmpegProcess,
+  onLine?: (line: string) => void,
+  keep = 20,
+): string[] {
   const lines: string[] = [];
   let partial = '';
   proc.stderr.setEncoding('utf8');
@@ -61,7 +71,9 @@ let encoderList: string | null = null;
 export function hasEncoder(name: string): boolean {
   if (encoderList === null) {
     try {
-      encoderList = execFileSync(FFMPEG, ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+      encoderList = execFileSync(FFMPEG, ['-hide_banner', '-encoders'], {
+        encoding: 'utf8',
+      });
     } catch {
       encoderList = '';
     }
@@ -69,7 +81,10 @@ export function hasEncoder(name: string): boolean {
   return new RegExp(String.raw`\s${name}\s`).test(encoderList);
 }
 
-export function killGently(proc: ChildProcess | null | undefined, ms = 2000): void {
+export function killGently(
+  proc: ChildProcess | null | undefined,
+  ms = 2000,
+): void {
   if (proc?.exitCode !== null || proc.signalCode) return;
   proc.kill('SIGTERM');
   setTimeout(() => {

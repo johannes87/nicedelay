@@ -3,7 +3,15 @@ import net from 'node:net';
 import { errorMessage } from '../config.ts';
 import type { Config, IngestInfo } from '../../shared/types.ts';
 import type { BufferStore, Session } from './buffer.ts';
-import { AUDIO_CHAIN, type FfmpegProcess, killGently, pipe, scaleChain, spawnFfmpeg, tailStderr } from './ffmpeg.ts';
+import {
+  AUDIO_CHAIN,
+  type FfmpegProcess,
+  killGently,
+  pipe,
+  scaleChain,
+  spawnFfmpeg,
+  tailStderr,
+} from './ffmpeg.ts';
 import { frameBytes } from '../render/yuv.ts';
 import { AVQueue, FrameAssembler } from './queues.ts';
 import { freePort, StopDetector } from './relay.ts';
@@ -27,13 +35,21 @@ interface IngestEvents {
  * Picks the input's video/audio details out of ffmpeg's stream listing, e.g.
  * `Stream #0:0: Video: h264 (High), yuv420p(tv, bt709), 1920x1080, 6000 kb/s, 30 fps, ...`
  */
-export function parseStreamInfo(line: string, info: IngestInfo | null): IngestInfo | null {
+export function parseStreamInfo(
+  line: string,
+  info: IngestInfo | null,
+): IngestInfo | null {
   if (!line.includes('Stream #0:')) return info;
   const video = /Video: (\w+)/.exec(line);
   const size = /\b(\d{2,5})x(\d{2,5})\b/.exec(line);
   const fps = /\b(\d{1,3}(?:\.\d{1,3})?) fps\b/.exec(line);
   if (video && size) {
-    return { codec: video[1], width: Number(size[1]), height: Number(size[2]), fps: fps ? Number(fps[1]) : 0 };
+    return {
+      codec: video[1],
+      width: Number(size[1]),
+      height: Number(size[2]),
+      fps: fps ? Number(fps[1]) : 0,
+    };
   }
   const audio = /Audio: (\w+)/.exec(line);
   return audio && info ? { ...info, audio: audio[1] } : info;
@@ -72,8 +88,15 @@ export class Ingest extends EventEmitter<IngestEvents> {
   thumbGeometry(): { tw: number; th: number; rate: number } {
     const { width, height } = this.config.output;
     // Bound thumbnail memory to ~900 thumbs across the whole buffer.
-    const rate = Math.min(5, Math.max(0.5, 900 / (this.config.bufferMinutes * 60)));
-    return { tw: Math.round(width / 10) * 2, th: Math.round(height / 10) * 2, rate };
+    const rate = Math.min(
+      5,
+      Math.max(0.5, 900 / (this.config.bufferMinutes * 60)),
+    );
+    return {
+      tw: Math.round(width / 10) * 2,
+      th: Math.round(height / 10) * 2,
+      rate,
+    };
   }
 
   start(): void {
@@ -116,7 +139,8 @@ export class Ingest extends EventEmitter<IngestEvents> {
     const connect = (attempt: number) => {
       const up = net.connect(this.internalPort, '127.0.0.1');
       up.on('error', () => {
-        if (!upstream && attempt < 50 && !obs.destroyed) setTimeout(() => connect(attempt + 1), 50);
+        if (!upstream && attempt < 50 && !obs.destroyed)
+          setTimeout(() => connect(attempt + 1), 50);
         else obs.destroy();
       });
       up.once('connect', () => {
@@ -147,13 +171,27 @@ export class Ingest extends EventEmitter<IngestEvents> {
       `[0:a:0]${AUDIO_CHAIN}[a]`;
     const args = [
       ['-loglevel', 'info'],
-      ['-listen', '1', '-i', `rtmp://127.0.0.1:${this.internalPort}/${app}/${key}`],
+      [
+        '-listen',
+        '1',
+        '-i',
+        `rtmp://127.0.0.1:${this.internalPort}/${app}/${key}`,
+      ],
       ['-filter_complex', filter],
       ['-map', '[full]', '-f', 'rawvideo', 'pipe:1'],
       ['-map', '[a]', '-f', 's16le', 'pipe:3'],
       ['-map', '[th]', '-f', 'rawvideo', 'pipe:5'],
       ['-map', '0:v:0', '-map', '0:a:0?', '-c', 'copy'],
-      ['-f', 'segment', '-segment_time', '1', '-segment_format', 'mpegts', '-reset_timestamps', '0'],
+      [
+        '-f',
+        'segment',
+        '-segment_time',
+        '1',
+        '-segment_format',
+        'mpegts',
+        '-reset_timestamps',
+        '0',
+      ],
       ['-segment_list', 'pipe:4', '-segment_list_type', 'csv'],
       [this.store.segmentPath(session, 0).replace('s00000000.ts', 's%08d.ts')],
     ].flat();
@@ -192,7 +230,8 @@ export class Ingest extends EventEmitter<IngestEvents> {
       listBuf = lines.pop() ?? '';
       for (const line of lines) {
         const fields = line.trim().split(',');
-        if (fields.length >= 3) this.store.addSegment(session, Number(fields[1]), Number(fields[2]));
+        if (fields.length >= 3)
+          this.store.addSegment(session, Number(fields[1]), Number(fields[2]));
       }
     });
 
@@ -220,7 +259,8 @@ export class Ingest extends EventEmitter<IngestEvents> {
         }
       }
       if (proc === this.proc) this.proc = null;
-      if (!this.stopped) setTimeout(() => void this.listen(), wasConnected ? 200 : 1000);
+      if (!this.stopped)
+        setTimeout(() => void this.listen(), wasConnected ? 200 : 1000);
     });
   }
 }

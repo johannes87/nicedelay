@@ -103,7 +103,8 @@ export class Overlay {
       ctx.shadowColor = accent;
       ctx.shadowBlur = 16 * s;
       ctx.beginPath();
-      if (p.kind === 'rewind') ctx.arc(0, 0, 104 * s, start, start - sweep, true);
+      if (p.kind === 'rewind')
+        ctx.arc(0, 0, 104 * s, start, start - sweep, true);
       else ctx.arc(0, 0, 104 * s, start, start + sweep, false);
       ctx.stroke();
       ctx.shadowBlur = 0;
@@ -143,7 +144,14 @@ export class Overlay {
     ctx.fillText(p.label, cx, 425 * s);
     ctx.restore();
 
-    blendLayer(frame, this, this.center, Math.round((this.w - w) / 2), Math.round(this.h * 0.5 - 220 * s), p.alpha);
+    blendLayer(
+      frame,
+      this,
+      this.center,
+      Math.round((this.w - w) / 2),
+      Math.round(this.h * 0.5 - 220 * s),
+      p.alpha,
+    );
   }
 
   drawTimeline(frame: Buffer, p: TimelineParams): void {
@@ -154,7 +162,8 @@ export class Overlay {
     const left = 30 * s;
     const right = w - 30 * s;
     const y = 82 * s;
-    const xOf = (d: number) => right - (Math.min(d, p.span) / p.span) * (right - left);
+    const xOf = (d: number) =>
+      right - (Math.min(d, p.span) / p.span) * (right - left);
     const accent = p.knob > 0.05 ? COLORS.replay : COLORS.live;
 
     ctx.lineCap = 'round';
@@ -203,7 +212,14 @@ export class Overlay {
     ctx.arc(kx, y, 7 * s, 0, Math.PI * 2);
     ctx.fill();
 
-    blendLayer(frame, this, this.timeline, Math.round((this.w - w) / 2), Math.round(this.h * 0.86 - y), p.alpha);
+    blendLayer(
+      frame,
+      this,
+      this.timeline,
+      Math.round((this.w - w) / 2),
+      Math.round(this.h * 0.86 - y),
+      p.alpha,
+    );
   }
 
   /** Corner status pill. */
@@ -251,7 +267,15 @@ export class Overlay {
     ctx.textAlign = 'left';
     ctx.fillText(p.text, ix + iconW, iy + 1 * s);
 
-    blendLayer(frame, this, this.pill, Math.round(44 * s), Math.round(36 * s), p.alpha, Math.ceil(pw + 6 * s));
+    blendLayer(
+      frame,
+      this,
+      this.pill,
+      Math.round(44 * s),
+      Math.round(36 * s),
+      p.alpha,
+      Math.ceil(pw + 6 * s),
+    );
   }
 }
 
@@ -262,13 +286,28 @@ function layer(w: number, h: number): Layer {
   return { canvas, ctx: canvas.getContext('2d'), w, h };
 }
 
-function blendLayer(frame: Buffer, ov: Overlay, l: Layer, x: number, y: number, alpha: number, usedW = l.w): void {
+function blendLayer(
+  frame: Buffer,
+  ov: Overlay,
+  l: Layer,
+  x: number,
+  y: number,
+  alpha: number,
+  usedW = l.w,
+): void {
   const width = Math.min(l.w, usedW + (usedW & 1));
   const img = l.ctx.getImageData(0, 0, width, l.h);
   blendRGBA(frame, ov.w, ov.h, img.data, width, l.h, x, y, alpha);
 }
 
-function roundRect(ctx: SKRSContext2D, x: number, y: number, w: number, h: number, r: number): void {
+function roundRect(
+  ctx: SKRSContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);

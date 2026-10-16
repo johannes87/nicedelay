@@ -6,7 +6,8 @@ export type { Config, Destination, EncoderChoice } from '../shared/types.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
 
-export const CONFIG_PATH = process.env.NICEDELAY_CONFIG || path.join(ROOT, 'config.json');
+export const CONFIG_PATH =
+  process.env.NICEDELAY_CONFIG || path.join(ROOT, 'config.json');
 
 export const DEFAULTS: Config = {
   httpHost: '127.0.0.1',
@@ -47,12 +48,14 @@ function num(v: unknown, min: number, max: number, dflt: number): number {
 }
 
 const even = (n: number) => Math.round(n / 2) * 2;
-const str = (v: unknown, dflt = '') => (typeof v === 'string' ? v.trim() : dflt);
+const str = (v: unknown, dflt = '') =>
+  typeof v === 'string' ? v.trim() : dflt;
 const bool = (v: unknown, dflt: boolean) => (typeof v === 'boolean' ? v : dflt);
 
 const ALLOWED_FPS = new Set([24, 25, 30, 48, 50, 60]);
 const ENCODERS = new Set<string>(['auto', 'h264_videotoolbox', 'libx264']);
-const isEncoder = (v: unknown): v is EncoderChoice => typeof v === 'string' && ENCODERS.has(v);
+const isEncoder = (v: unknown): v is EncoderChoice =>
+  typeof v === 'string' && ENCODERS.has(v);
 
 /** Builds a complete, sane Config from untrusted JSON (file or API), falling back to defaults. */
 export function validate(input: unknown): Config {
@@ -77,14 +80,30 @@ export function validate(input: unknown): Config {
       width: even(num(output.width, 320, 7680, d.output.width)),
       height: even(num(output.height, 180, 4320, d.output.height)),
       fps: ALLOWED_FPS.has(fps) ? fps : d.output.fps,
-      videoBitrate: num(output.videoBitrate, 500, 50_000, d.output.videoBitrate),
+      videoBitrate: num(
+        output.videoBitrate,
+        500,
+        50_000,
+        d.output.videoBitrate,
+      ),
       audioBitrate: num(output.audioBitrate, 64, 320, d.output.audioBitrate),
       encoder: isEncoder(output.encoder) ? output.encoder : d.output.encoder,
     },
-    destinations: (Array.isArray(c.destinations) ? c.destinations : []).filter(isObject).flatMap((x) => {
-      const url = str(x.url);
-      return url ? [{ name: str(x.name).slice(0, 60), url, key: str(x.key), enabled: x.enabled !== false }] : [];
-    }),
+    destinations: (Array.isArray(c.destinations) ? c.destinations : [])
+      .filter(isObject)
+      .flatMap((x) => {
+        const url = str(x.url);
+        return url
+          ? [
+              {
+                name: str(x.name).slice(0, 60),
+                url,
+                key: str(x.key),
+                enabled: x.enabled !== false,
+              },
+            ]
+          : [];
+      }),
     bufferMinutes,
     delaySeconds: num(c.delaySeconds, 1, bufferMinutes * 60, d.delaySeconds),
     transition: {
@@ -92,7 +111,12 @@ export function validate(input: unknown): Config {
       soundVolume: num(transition.soundVolume, 0, 1, d.transition.soundVolume),
       badge: bool(transition.badge, d.transition.badge),
     },
-    reconnectGraceSeconds: num(c.reconnectGraceSeconds, 0, 300, d.reconnectGraceSeconds),
+    reconnectGraceSeconds: num(
+      c.reconnectGraceSeconds,
+      0,
+      300,
+      d.reconnectGraceSeconds,
+    ),
   };
 }
 
@@ -105,7 +129,9 @@ export function loadConfig(): Config {
     return validate(JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')));
   } catch (err) {
     if (!(err instanceof Error && 'code' in err && err.code === 'ENOENT')) {
-      console.warn(`[config] could not read ${CONFIG_PATH}: ${errorMessage(err)}`);
+      console.warn(
+        `[config] could not read ${CONFIG_PATH}: ${errorMessage(err)}`,
+      );
     }
     return validate({});
   }
