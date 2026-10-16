@@ -12,11 +12,13 @@
     "build": "vite build",
     "typecheck": "tsc -p . && tsc -p web",
     "lint": "oxlint --type-aware",
+    "lint:sonar": "tools/sonar/node_modules/.bin/eslint --config tools/sonar/eslint.config.js --max-warnings 0 src web/src test vite.config.ts",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "test": "node --test 'test/**/*.test.ts'",
-    "check": "npm run typecheck && npm run lint && npm run format:check && npm test",
-    "fake-obs": "scripts/fake-obs.sh"
+    "check": "npm run typecheck && npm run lint && npm run lint:sonar && npm run format:check && npm test",
+    "fake-obs": "scripts/fake-obs.sh",
+    "postinstall": "npm --prefix tools/sonar install --no-audit --no-fund --loglevel=error"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.11",

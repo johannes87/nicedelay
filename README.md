@@ -60,7 +60,9 @@ Config lives in `config.json` (created on first save). Changes to quality or the
 npm run dev        # server with auto-restart
 npm run dev:web    # dashboard with hot reload (proxies to the server)
 npm run fake-obs   # stream a test pattern (counter + beeps) into the ingest
-npm run check      # typecheck (tsc 7) · lint (oxlint, type-aware) · format (oxfmt) · tests
+npm run check      # typecheck (tsc 7) · lint (oxlint, type-aware + SonarQube rules) · format (oxfmt) · tests
 ```
+
+The SonarQube rules (`npm run lint:sonar`) come from `eslint-plugin-sonarjs`, which still needs the TypeScript 6 compiler API. They live in `tools/sonar` with their own dependencies, installed automatically by `npm install`.
 
 The server runs TypeScript directly on Node (type stripping). `tsc` only type-checks.
