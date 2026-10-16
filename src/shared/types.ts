@@ -31,8 +31,6 @@ export interface Config {
   transition: {
     sound: boolean;
     soundVolume: number;
-    /** keep a small "REPLAY" badge on screen while delayed */
-    badge: boolean;
   };
   reconnectGraceSeconds: number;
 }

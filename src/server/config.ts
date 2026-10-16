@@ -24,7 +24,7 @@ export const DEFAULTS: Config = {
   destinations: [],
   bufferMinutes: 10,
   delaySeconds: 10,
-  transition: { sound: true, soundVolume: 0.6, badge: false },
+  transition: { sound: true, soundVolume: 0.6 },
   reconnectGraceSeconds: 15,
 };
 
@@ -109,7 +109,6 @@ export function validate(input: unknown): Config {
     transition: {
       sound: bool(transition.sound, d.transition.sound),
       soundVolume: num(transition.soundVolume, 0, 1, d.transition.soundVolume),
-      badge: bool(transition.badge, d.transition.badge),
     },
     reconnectGraceSeconds: num(
       c.reconnectGraceSeconds,

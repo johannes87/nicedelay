@@ -5,7 +5,12 @@ import { Encoder } from './media/encoder.ts';
 import type { Ingest } from './media/ingest.ts';
 import type { AVFrame } from './media/queues.ts';
 import { BufferReader } from './media/reader.ts';
-import { formatDelay, Overlay, type PillParams } from './render/overlay.ts';
+import {
+  formatDelay,
+  formatDuration,
+  Overlay,
+  type PillParams,
+} from './render/overlay.ts';
 import { mixInto, tapeWhoosh } from './render/sfx.ts';
 import {
   crossfade,
@@ -30,7 +35,7 @@ export type {
   TransitionEvent,
 } from '../shared/types.ts';
 
-const PILL_HOLD = 3; // seconds the corner pill stays after a transition
+const PILL_HOLD = 3; // seconds the corner pill is highlighted after a transition (LIVE then disappears)
 const PILL_FADE = 0.6;
 const READY_TIMEOUT = 3; // max seconds to wait for a reader at landing
 const MAX_DRAW_FPS = 30; // transition animation frame rate cap (keeps 60 fps output within budget)
@@ -396,8 +401,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       return { kind: 'live', text: 'RECONNECTING', alpha: 0.95 };
     }
     if (this.transition) return null;
-    let alpha =
-      this.config.transition.badge && this.mode === 'delayed' ? 0.9 : 0;
+    // While delayed, viewers always see that they are watching the past.
+    let alpha = this.mode === 'delayed' ? 0.8 : 0;
     if (this.pill) {
       const age = (this.ticks - this.pill.start) / this.fps;
       if (age > PILL_HOLD + PILL_FADE) this.pill = null;
@@ -407,7 +412,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     if (this.mode === 'delayed')
       return {
         kind: 'replay',
-        text: `REPLAY  ${formatDelay(this.targetDelay)}`,
+        text: `${formatDuration(this.targetDelay)} delay`,
         alpha,
       };
     return { kind: 'live', text: 'LIVE', alpha };

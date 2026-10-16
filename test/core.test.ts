@@ -12,7 +12,7 @@ import {
   FrameAssembler,
 } from '../src/server/media/queues.ts';
 import { StopDetector } from '../src/server/media/relay.ts';
-import { formatDelay } from '../src/server/render/overlay.ts';
+import { formatDelay, formatDuration } from '../src/server/render/overlay.ts';
 import {
   crossfade,
   frameBytes,
@@ -247,6 +247,13 @@ describe('render helpers', () => {
     assert.equal(formatDelay(10), '−0:10');
     assert.equal(formatDelay(75, { sign: false }), '1:15');
     assert.equal(formatDelay(3723), '−1:02:03');
+  });
+
+  it('formats delays as short durations', () => {
+    assert.equal(formatDuration(10), '10s');
+    assert.equal(formatDuration(90.4), '90s');
+    assert.equal(formatDuration(120), '2m');
+    assert.equal(formatDuration(150), '150s');
   });
 
   it('scales, tones and crossfades yuv frames', () => {

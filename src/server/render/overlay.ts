@@ -19,6 +19,12 @@ export function formatDelay(seconds: number, { sign = true } = {}): string {
   return sign ? `−${body}` : body;
 }
 
+/** 5s, 90s, 2m: whole minutes in minutes, anything else in seconds (the shorter text) */
+export function formatDuration(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return s && s % 60 === 0 ? `${s / 60}m` : `${s}s`;
+}
+
 export interface CenterParams {
   kind: TransitionKind;
   alpha: number;
@@ -68,7 +74,7 @@ export class Overlay {
     const s = this.s;
     this.center = layer(Math.round(640 * s), Math.round(470 * s));
     this.timeline = layer(Math.round(width * 0.72), Math.round(130 * s));
-    this.pill = layer(Math.round(760 * s), Math.round(104 * s));
+    this.pill = layer(Math.round(480 * s), Math.round(64 * s));
   }
 
   drawCenter(frame: Buffer, p: CenterParams): void {
@@ -228,37 +234,31 @@ export class Overlay {
     const { ctx, h } = this.pill;
     const s = this.s;
     ctx.clearRect(0, 0, this.pill.w, h);
-    ctx.font = `700 ${Math.round(34 * s)}px ${FONT}`;
-    ctx.letterSpacing = `${Math.round(3 * s)}px`;
+    ctx.font = `600 ${Math.round(22 * s)}px ${FONT}`;
+    ctx.letterSpacing = `${Math.round(1 * s)}px`;
     const textW = ctx.measureText(p.text).width;
-    const pad = 26 * s;
-    const iconW = 38 * s;
+    const pad = 16 * s;
+    // The delay badge is text only; LIVE / RECONNECTING get a red dot.
+    const iconW = p.kind === 'live' ? 29 * s : 0;
     const pw = Math.min(this.pill.w - 4 * s, pad * 2 + iconW + textW);
-    const ph = 72 * s;
+    const ph = 44 * s;
     const py = (h - ph) / 2;
-    const accent = p.kind === 'replay' ? COLORS.replay : COLORS.live;
 
-    ctx.fillStyle = 'rgba(12,12,16,0.68)';
+    ctx.fillStyle = 'rgba(12,12,16,0.55)';
     roundRect(ctx, 2 * s, py, pw, ph, ph / 2);
     ctx.fill();
+    ctx.lineWidth = 2 * s;
+    ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+    ctx.stroke();
 
     const ix = 2 * s + pad;
     const iy = h / 2;
-    ctx.fillStyle = accent;
-    if (p.kind === 'replay') {
-      for (const off of [0, 14 * s]) {
-        ctx.beginPath();
-        ctx.moveTo(ix + off, iy);
-        ctx.lineTo(ix + off + 15 * s, iy - 13 * s);
-        ctx.lineTo(ix + off + 15 * s, iy + 13 * s);
-        ctx.closePath();
-        ctx.fill();
-      }
-    } else {
-      ctx.shadowColor = accent;
-      ctx.shadowBlur = 12 * s;
+    if (p.kind === 'live') {
+      ctx.fillStyle = COLORS.live;
+      ctx.shadowColor = COLORS.live;
+      ctx.shadowBlur = 8 * s;
       ctx.beginPath();
-      ctx.arc(ix + 12 * s, iy, 11 * s, 0, Math.PI * 2);
+      ctx.arc(ix + 8 * s, iy, 7 * s, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
     }
@@ -271,8 +271,8 @@ export class Overlay {
       frame,
       this,
       this.pill,
-      Math.round(44 * s),
-      Math.round(36 * s),
+      Math.round(32 * s),
+      Math.round(28 * s),
       p.alpha,
       Math.ceil(pw + 6 * s),
     );
