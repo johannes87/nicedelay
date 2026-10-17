@@ -189,6 +189,10 @@ export class Ingest extends EventEmitter<IngestEvents> {
         '1',
         '-segment_format',
         'mpegts',
+        // Write every packet right away instead of in 256 KB blocks (~0.4 s of video),
+        // so readers tailing the newest segment stay close to the live edge.
+        '-segment_format_options',
+        'flush_packets=1',
         '-reset_timestamps',
         '0',
       ],
