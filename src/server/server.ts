@@ -52,10 +52,7 @@ class App {
 
   private build(): void {
     const c = this.config;
-    this.store = new BufferStore({
-      fps: c.output.fps,
-      bufferSeconds: c.bufferMinutes * 60,
-    });
+    this.store = new BufferStore({ bufferSeconds: c.bufferMinutes * 60 });
     this.ingest = new Ingest({ config: c, store: this.store });
     this.playout = new Playout({
       config: c,

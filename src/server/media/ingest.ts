@@ -13,7 +13,11 @@ import {
   tailStderr,
 } from './ffmpeg.ts';
 import { frameBytes } from '../render/yuv.ts';
-import { AVQueue, FrameAssembler } from './queues.ts';
+import {
+  AUDIO_BYTES_PER_SAMPLE,
+  AUDIO_RATE,
+  FrameAssembler,
+} from './queues.ts';
 import { freePort, StopDetector } from './relay.ts';
 
 interface IngestEvents {
@@ -25,11 +29,12 @@ interface IngestEvents {
  * Listens for OBS over RTMP. OBS connects to a small relay in Node, which forwards the
  * stream to ffmpeg on an internal port and notices when OBS stops streaming on purpose
  * (as opposed to crashing or losing the connection). One ffmpeg process per connection produces:
- *   fd 1: decoded live video (output size, CFR)   -> low-latency live path
- *   fd 3: decoded live audio (s16le 48k stereo)
+ *   fd 3: decoded live audio (s16le 48k stereo)    -> clock for the live edge
  *   fd 4: segment list (one CSV line per finished segment)
- *   fd 5: small thumbnails at a low rate           -> scrub animation
- *   disk: MPEG-TS segments (stream copy)           -> the rolling buffer
+ *   fd 5: small thumbnails, from keyframes only    -> scrub animation
+ *   disk: MPEG-TS segments (stream copy)           -> the rolling buffer, live included
+ * Only keyframes are decoded here, which is cheap: the picture viewers see, live or
+ * delayed, comes from a BufferReader tailing the segments.
  */
 /**
  * Picks the input's video/audio details out of ffmpeg's stream listing, e.g.
@@ -58,8 +63,6 @@ export function parseStreamInfo(
 export class Ingest extends EventEmitter<IngestEvents> {
   readonly config: Config;
   readonly store: BufferStore;
-  /** decoded live feed of the current session */
-  live: AVQueue | null = null;
   session: Session | null = null;
   connected = false;
   connectedAt = 0;
@@ -161,26 +164,26 @@ export class Ingest extends EventEmitter<IngestEvents> {
   private async listen(): Promise<void> {
     if (this.stopped) return;
     this.internalPort = await freePort();
-    const { width: w, height: h, fps } = this.config.output;
     const { app, key } = this.config.ingest;
     const { tw, th, rate } = this.thumbGeometry();
     const session = this.store.createSession();
-    const filter =
-      `[0:v:0]fps=${fps}:start_time=0,${scaleChain(w, h)},split=2[full][t];` +
-      `[t]fps=${rate}:start_time=0,scale=${tw}:${th}:flags=area,format=yuv420p[th];` +
-      `[0:a:0]${AUDIO_CHAIN}[a]`;
+    // Keyframes arrive every 1-2 s (as OBS is set up); the fps filter repeats each one to
+    // keep thumbnails at a steady rate, so thumbnail n shows time n / rate. The audio gets
+    // its own filter graph: ffmpeg keeps the outputs of one graph in step, so sharing one
+    // would hold the audio (the live edge clock) back by seconds, like the thumbnails.
+    const thumbFilter = `${scaleChain(tw, th, 'area')},fps=${rate}:start_time=0`;
     const args = [
       ['-loglevel', 'info'],
       [
         '-listen',
         '1',
+        '-skip_frame:v',
+        'nokey',
         '-i',
         `rtmp://127.0.0.1:${this.internalPort}/${app}/${key}`,
       ],
-      ['-filter_complex', filter],
-      ['-map', '[full]', '-f', 'rawvideo', 'pipe:1'],
-      ['-map', '[a]', '-f', 's16le', 'pipe:3'],
-      ['-map', '[th]', '-f', 'rawvideo', 'pipe:5'],
+      ['-map', '0:a:0', '-af', AUDIO_CHAIN, '-f', 's16le', 'pipe:3'],
+      ['-map', '0:v:0', '-vf', thumbFilter, '-f', 'rawvideo', 'pipe:5'],
       ['-map', '0:v:0', '-map', '0:a:0?', '-c', 'copy'],
       [
         '-f',
@@ -201,7 +204,6 @@ export class Ingest extends EventEmitter<IngestEvents> {
     ].flat();
     const proc = spawnFfmpeg(args, { fds: 6 });
     this.proc = proc;
-    const live = new AVQueue(fps);
     let thumbs = 0;
 
     const onFirstData = () => {
@@ -209,20 +211,14 @@ export class Ingest extends EventEmitter<IngestEvents> {
       this.connected = true;
       this.store.register(session);
       this.session = session;
-      this.live = live;
       this.connectedAt = Date.now();
       this.emit('connected', session);
     };
 
-    const video = new FrameAssembler(frameBytes(w, h), (frame) => {
-      onFirstData();
-      session.liveFrames++;
-      live.pushVideo(frame);
-    });
-    proc.stdout.on('data', (d: Buffer) => video.push(d));
+    // The audio is resampled to fill gaps, so its length is the session's media time.
     pipe(proc, 3).on('data', (d: Buffer) => {
       onFirstData();
-      live.pushAudio(d);
+      session.liveSeconds += d.length / (AUDIO_RATE * AUDIO_BYTES_PER_SAMPLE);
     });
 
     let listBuf = '';

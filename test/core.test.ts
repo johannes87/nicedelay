@@ -33,7 +33,7 @@ function audioFor(frame: number, frames = 1): Buffer {
 
 function store(): BufferStore {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'nicedelay-test-'));
-  return new BufferStore({ fps: FPS, bufferSeconds: 60, root });
+  return new BufferStore({ bufferSeconds: 60, root });
 }
 
 describe('ByteQueue', () => {
@@ -116,7 +116,7 @@ describe('BufferStore', () => {
     s.register(session);
     s.addSegment(session, 0, 2);
     s.addSegment(session, 2, 4);
-    session.liveFrames = 5 * FPS;
+    session.liveSeconds = 5;
     const loc = s.locate(3.5);
     assert.ok(loc);
     assert.equal(loc.index, 1);
@@ -134,12 +134,12 @@ describe('BufferStore', () => {
     const a = s.createSession();
     s.register(a);
     s.addSegment(a, 0, 3);
-    a.liveFrames = 3 * FPS;
+    a.liveSeconds = 3;
     a.ended = true;
     const b = s.createSession();
     s.register(b);
     assert.equal(b.base, 3);
-    b.liveFrames = 2 * FPS;
+    b.liveSeconds = 2;
     assert.equal(s.liveEdge, 5);
     assert.equal(s.recorded, 5);
     assert.equal(s.locate(4)?.session, b);

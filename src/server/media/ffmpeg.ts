@@ -4,9 +4,9 @@ import type { Readable, Writable } from 'node:stream';
 export const FFMPEG = process.env.FFMPEG || 'ffmpeg';
 
 /** Normalize any input picture to the output canvas (letterboxed, square pixels). */
-export function scaleChain(w: number, h: number): string {
+export function scaleChain(w: number, h: number, flags = 'bicubic'): string {
   return (
-    `scale=${w}:${h}:force_original_aspect_ratio=decrease:flags=bicubic,` +
+    `scale=${w}:${h}:force_original_aspect_ratio=decrease:flags=${flags},` +
     `pad=${w}:${h}:-1:-1:color=black,setsar=1,format=yuv420p`
   );
 }

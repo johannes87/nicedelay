@@ -18,7 +18,8 @@ export interface Session {
   segments: Segment[];
   /** number of completed segments ever (also the index of the one being written) */
   completed: number;
-  liveFrames: number;
+  /** media seconds received so far, counted from the decoded live audio */
+  liveSeconds: number;
   ended: boolean;
 }
 
@@ -44,7 +45,6 @@ export interface Location {
  * previous one ended, so disconnect gaps collapse instead of leaving holes.
  */
 export class BufferStore {
-  readonly fps: number;
   bufferSeconds: number;
   readonly root: string;
   sessions: Session[] = [];
@@ -52,15 +52,12 @@ export class BufferStore {
   private nextSessionId = 1;
 
   constructor({
-    fps,
     bufferSeconds,
     root,
   }: {
-    fps: number;
     bufferSeconds: number;
     root?: string;
   }) {
-    this.fps = fps;
     this.bufferSeconds = bufferSeconds;
     this.root = root ?? path.join(os.tmpdir(), 'nicedelay-buffer');
     fs.rmSync(this.root, { recursive: true, force: true });
@@ -79,7 +76,7 @@ export class BufferStore {
       base: 0,
       segments: [],
       completed: 0,
-      liveFrames: 0,
+      liveSeconds: 0,
       ended: false,
     };
     fs.mkdirSync(session.dir, { recursive: true });
@@ -88,7 +85,7 @@ export class BufferStore {
 
   register(session: Session): void {
     const prev = this.sessions.at(-1);
-    session.base = prev ? sessionEnd(prev, this.fps) : 0;
+    session.base = prev ? sessionEnd(prev) : 0;
     this.sessions.push(session);
   }
 
@@ -109,7 +106,7 @@ export class BufferStore {
   /** Live edge on the global timeline. */
   get liveEdge(): number {
     const s = this.sessions.at(-1);
-    return s ? sessionEnd(s, this.fps) : 0;
+    return s ? sessionEnd(s) : 0;
   }
 
   get oldest(): number {
@@ -206,7 +203,7 @@ export class BufferStore {
   }
 }
 
-function sessionEnd(s: Session, fps: number): number {
+function sessionEnd(s: Session): number {
   const last = s.segments.at(-1);
-  return s.base + Math.max(s.liveFrames / fps, s.ended && last ? last.end : 0);
+  return s.base + Math.max(s.liveSeconds, s.ended && last ? last.end : 0);
 }

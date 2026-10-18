@@ -39,6 +39,8 @@ const PILL_HOLD = 3; // seconds the corner pill is highlighted after a transitio
 const PILL_FADE = 0.6;
 const READY_TIMEOUT = 3; // max seconds to wait for a reader at landing
 const MAX_DRAW_FPS = 30; // transition animation frame rate cap (keeps 60 fps output within budget)
+const LIVE_LEAD = 1; // seconds a transition's live reader starts early, covering decoder latency
+const LIVE_CUSHION = 0.2; // seconds it keeps queued after landing; the surplus is skipped
 
 const easeInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
@@ -53,9 +55,8 @@ function pillAlpha(age: number): number {
   return 1 - (age - PILL_HOLD) / PILL_FADE;
 }
 
-type LiveSource = { kind: 'live' };
-type ReaderSource = { kind: 'reader'; reader: BufferReader };
-type Source = LiveSource | ReaderSource;
+/** Live keeps its reader at the live edge; delayed keeps it `targetDelay` behind. */
+type Source = { kind: 'live' | 'delayed'; reader: BufferReader };
 type Correction = 'none' | 'steady' | 'fast';
 
 interface PlayoutEvents {
@@ -66,8 +67,8 @@ interface PlayoutEvents {
 }
 
 /**
- * Drives the output: one frame per tick, from the live feed, a buffer reader, or a
- * transition that renders the rewind / fast-forward animation between the two.
+ * Drives the output: one frame per tick, from a buffer reader (at the live edge or
+ * behind it), or a transition that renders the rewind / fast-forward animation between two.
  */
 export class Playout extends EventEmitter<PlayoutEvents> {
   config: Config;
@@ -133,7 +134,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   private startOutput(): void {
     this.mode = 'live';
     this.targetDelay = 0;
-    this.source = { kind: 'live' };
+    this.source = this.liveSource(this.store.liveEdge);
     this.liveRebuffer = true;
     this.lastFrame = null;
     this.startEncoder();
@@ -161,7 +162,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     clearTimeout(this.timer);
     this.encoder?.stop();
     this.encoder = null;
-    if (this.source?.kind === 'reader') this.source.reader.destroy();
+    this.source?.reader.destroy();
     this.transition?.dispose();
     this.transition = null;
     this.pending = null;
@@ -274,10 +275,6 @@ export class Playout extends EventEmitter<PlayoutEvents> {
 
   private tick(): void {
     this.ticks++;
-    // The live queue must keep flowing even while not shown, so it stays at the live edge.
-    if (this.ingest.live && !this.wantsLive())
-      this.ingest.live.trimTo(this.liveTarget);
-
     let out: AVFrame | null;
     if (this.transition) {
       out = this.transition.render(); // may repeat the previous frame: not ours to draw on
@@ -311,47 +308,65 @@ export class Playout extends EventEmitter<PlayoutEvents> {
     if (this.ticks % this.fps === 0) this.housekeeping();
   }
 
-  private wantsLive(): boolean {
-    if (this.transition) return this.transition.wantsLive();
-    return this.source?.kind === 'live';
+  /** A source that follows the live edge, starting at global time `t`. */
+  liveSource(t: number): Source {
+    const reader = new BufferReader({
+      store: this.store,
+      config: this.config,
+      t,
+    });
+    return { kind: 'live', reader };
   }
 
-  pullLive(): AVFrame | null {
-    const q = this.ingest.live;
-    if (!q) return null;
-    if (q.length === 0) this.liveRebuffer = true;
+  /** The source's reader, moved on to the next ingest session once this one has played out. */
+  private currentReader(src: Source): BufferReader | null {
+    const r = src.reader;
+    if (!r.exhausted) return r;
+    const next = this.store.nextSession(r.session);
+    if (!next) return null;
+    try {
+      // Live jumps to the new live edge; a delay plays the new session from its start.
+      const t = src.kind === 'live' ? this.store.liveEdge : next.base;
+      src.reader = new BufferReader({
+        store: this.store,
+        config: this.config,
+        t,
+      });
+      r.destroy();
+      return src.reader;
+    } catch {
+      return null;
+    }
+  }
+
+  pullLive(src: Source, correct: Correction = 'steady'): AVFrame | null {
+    const r = this.currentReader(src);
+    if (!r) return null;
+    if (r.queue.length === 0) this.liveRebuffer = true;
     if (this.liveRebuffer) {
-      if (q.length < this.liveTarget) return null;
+      if (r.queue.length < this.liveTarget) return null;
       this.liveRebuffer = false;
     }
-    // A backlog (e.g. after the machine stalled) is skipped in one jump: playing through
-    // it faster would be visible. Small drift (the feed's clock slightly ahead of ours)
-    // is absorbed by dropping single frames.
-    if (q.length > this.liveMax * 2) q.trimTo(this.liveTarget);
-    else if (q.length > this.liveMax) q.trimTo(q.length - 1);
-    return q.pull(q.length > this.liveMax);
+    // Landing on live: jump to a small cushion right away, hidden by the crossfade.
+    // A backlog (e.g. right after OBS connects, or after the machine stalled) fills the
+    // queue, with more waiting in the decoder: it's skipped in jumps, as playing through it
+    // faster would be visible. Small drift (the feed's clock slightly ahead of ours) is
+    // absorbed by dropping single frames.
+    const n = r.queue.length;
+    const cushion = Math.round(this.fps * LIVE_CUSHION);
+    if (correct === 'fast' && n > cushion) {
+      r.skip(n - cushion);
+    } else if (n >= r.maxQueue - 1) {
+      r.skip(n - this.liveTarget);
+    } else if (n > this.liveMax) {
+      r.skip(1);
+    }
+    return r.pull(r.queue.length > this.liveMax);
   }
 
-  pullReader(
-    src: ReaderSource,
-    correct: Correction = 'steady',
-  ): AVFrame | null {
-    let r = src.reader;
-    if (r.exhausted) {
-      const next = this.store.nextSession(r.session);
-      if (!next) return null;
-      try {
-        const nr = new BufferReader({
-          store: this.store,
-          config: this.config,
-          t: next.base,
-        });
-        r.destroy();
-        src.reader = r = nr;
-      } catch {
-        return null;
-      }
-    }
+  pullDelayed(src: Source, correct: Correction = 'steady'): AVFrame | null {
+    const r = this.currentReader(src);
+    if (!r) return null;
     // Keep the real delay honest: drift, underruns and slow starts accumulate.
     // Without OBS the live edge stands still, so there is nothing to track: just play out.
     if (correct !== 'none' && this.ingest.connected) {
@@ -370,8 +385,8 @@ export class Playout extends EventEmitter<PlayoutEvents> {
 
   pullFrom(src: Source, correct: Correction = 'steady'): AVFrame | null {
     return src.kind === 'live'
-      ? this.pullLive()
-      : this.pullReader(src, correct);
+      ? this.pullLive(src, correct)
+      : this.pullDelayed(src, correct);
   }
 
   private pullSource(): AVFrame | null {
@@ -462,9 +477,9 @@ export class Playout extends EventEmitter<PlayoutEvents> {
       this.source,
       this.transition?.target,
       this.transition?.old,
-    ].flatMap((s) => (s?.kind === 'reader' ? [s.reader] : []));
-    for (const r of readers)
-      protect = Math.min(protect, r.startTime, r.position);
+    ].flatMap((s) => (s ? [s.reader] : []));
+    // Readers only move forward, so what lies behind their position can go.
+    for (const r of readers) protect = Math.min(protect, r.position);
     this.store.trim(protect);
     this.emit('tick');
   }
@@ -472,7 +487,7 @@ export class Playout extends EventEmitter<PlayoutEvents> {
   // ---------------------------------------------------------------- state
 
   get position(): number {
-    return this.source?.kind === 'reader'
+    return this.source?.kind === 'delayed'
       ? this.source.reader.position
       : this.store.liveEdge;
   }
@@ -580,17 +595,18 @@ class Transition {
     const L0 = store.liveEdge;
     const landsAt = this.introSeconds + this.scrubSeconds;
     this.old = playout.source;
+    // Start decoding now so the picture is ready exactly when the scrub lands. Live starts
+    // early enough that its frames, which arrive late by the decoder's latency, are queued.
     if (toDelay === 0) {
-      this.target = { kind: 'live' };
+      this.target = playout.liveSource(L0 + landsAt - LIVE_LEAD);
       this.scrubTo = L0 + landsAt;
     } else {
-      // Start decoding now so the picture is ready exactly when the scrub lands.
       const reader = new BufferReader({
         store,
         config: playout.config,
         t: L0 + landsAt - toDelay,
       });
-      this.target = { kind: 'reader', reader };
+      this.target = { kind: 'delayed', reader };
       this.scrubTo = reader.startTime;
     }
     this.scrubFrom = L0 - fromDelay + this.introSeconds;
@@ -610,18 +626,8 @@ class Transition {
     );
   }
 
-  /** Whether the current phase consumes the live feed (otherwise Playout keeps it trimmed). */
-  wantsLive(): boolean {
-    const t = this.i / this.fps;
-    return (
-      (t < this.introSeconds && this.old?.kind === 'live') ||
-      (t >= this.introSeconds + this.scrubSeconds &&
-        this.target.kind === 'live')
-    );
-  }
-
   private get targetReady(): boolean {
-    return this.target.kind === 'live' || this.target.reader.ready;
+    return this.target.reader.ready;
   }
 
   render(): AVFrame {
@@ -767,7 +773,7 @@ class Transition {
 
   /** The old reader is no longer needed once the scrub starts. */
   private releaseOld(): void {
-    if (this.old?.kind === 'reader' && this.old !== this.target) {
+    if (this.old && this.old !== this.target) {
       this.old.reader.destroy();
       this.old = null;
     }
@@ -813,7 +819,7 @@ class Transition {
   }
 
   dispose(): void {
-    if (this.target.kind === 'reader') this.target.reader.destroy();
-    if (this.old?.kind === 'reader') this.old.reader.destroy();
+    this.target.reader.destroy();
+    this.old?.reader.destroy();
   }
 }
