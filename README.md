@@ -22,7 +22,7 @@ npm start
 Open the dashboard at <http://127.0.0.1:8080>, then:
 
 1. **Point OBS at nicedelay**: in OBS, Settings → Stream → Service **Custom**. Paste the server and stream key from nicedelay's settings (by default `rtmp://127.0.0.1:1935/live` and `nicedelay`).
-2. **Check the keyframe interval**: in OBS, Settings → Output. In **Simple** output mode there's nothing to do. In **Advanced** mode, open the **Streaming** tab and set **Keyframe Interval** to 1 or 2 s (the default `0` means "auto" and can be much longer). nicedelay jumps between keyframes, so short intervals make jumps fast and precise.
+2. **Set the keyframe interval**: in OBS, Settings → Output, set **Output Mode** to **Advanced**, open the **Streaming** tab and set **Keyframe Interval** to 1 or 2 s. Simple mode has no such setting, and with a Custom server OBS leaves it to the encoder, which can mean keyframes only every 4 s or more. nicedelay jumps between keyframes and takes the rewind animation's thumbnails from them, so short intervals make jumps fast, precise and cheap, and the animation smooth.
 3. **Tell nicedelay where to stream**: in nicedelay, Settings → Stream to. Add Twitch or YouTube (both connect over encrypted RTMPS) or any RTMP/RTMPS server, with your stream key.
 4. Start streaming in OBS. Press **Space** in the dashboard (or click the button) to delay; press it again to go live.
 
@@ -42,15 +42,15 @@ curl -X POST localhost:8080/api/live
 
 ```
 OBS ──RTMP──▶ ingest (ffmpeg) ──┬─ rolling buffer: MPEG-TS segments on disk
-                                ├─ decoded live feed ────────────┐
-                                └─ thumbnails (for the scrub)    ▼
-                                    buffer reader (ffmpeg) ─▶ playout clock ─▶ encoder (ffmpeg) ──▶ Twitch, YouTube, …
-                                                                  │
-                                                     rewind / fast-forward animation
+                                │            │
+                                │            ▼
+                                │  buffer reader (ffmpeg) ─▶ playout clock ─▶ encoder (ffmpeg) ──▶ Twitch, YouTube, …
+                                │                                  ▲
+                                └─ thumbnails (keyframes only) ─▶ rewind / fast-forward animation
 ```
 
-- **Ingest** listens for OBS and writes 1-second segments to a rolling buffer (stream copy, no quality loss). It also decodes a low-latency live feed.
-- **Playout** emits one frame per tick to a single long-lived encoder, so destinations see one continuous stream. When live, it plays the live feed. When delayed, a reader decodes the buffer from any past moment, tailing the segment still being written.
+- **Ingest** listens for OBS and writes 1-second segments to a rolling buffer (stream copy, no quality loss), packet by packet, so the newest footage is on disk right away. For the rewind animation's thumbnails it decodes only the keyframes, which is cheap.
+- **Playout** emits one frame per tick to a single long-lived encoder, so destinations see one continuous stream. A reader decodes the buffer, tailing the segment still being written: at the live edge when live, or from any past moment when delayed.
 - **Transitions** are rendered into the stream: the picture dims, VHS-style tracking noise rolls in, real footage scrubs from the old position to the new one, and an on-screen icon, timecode and timeline show what's happening. Audio and video stay paired frame by frame throughout.
 - When you stop streaming in OBS, viewers still see any delayed footage, then the stream ends. If OBS drops out instead (a crash or lost connection), nicedelay keeps the stream up for 15 seconds, showing "RECONNECTING", so a restarted OBS can continue the same stream.
 
@@ -58,7 +58,7 @@ Config lives in `config.json` (created on first save). Changes to quality or the
 
 ## Performance
 
-nicedelay re-encodes your stream: the badge and rewind animations are drawn into the picture, so it decodes what OBS sends and encodes it again. That's a second encode on top of OBS's own, plus another decode while the delay is on.
+nicedelay re-encodes your stream: the badge and rewind animations are drawn into the picture, so it decodes what OBS sends and encodes it again. That's one decode and a second encode on top of OBS's own encode.
 
 - **macOS** encodes on the GPU (VideoToolbox), so it costs little.
 - **Windows and Linux** currently encode on the CPU (x264). At 1080p60 that takes several cores, which can lower your fps in CPU-heavy games.
