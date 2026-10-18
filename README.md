@@ -3,6 +3,8 @@
 Stream delay for OBS that starts **instantly**.
 
 > **Status: prototype.** nicedelay works, but it's early. It's developed and tested on macOS only; Windows and Linux are untested. Expect rough edges, and don't rely on it for an important stream yet.
+>
+> nicedelay was largely written by Claude, Anthropic's AI coding assistant. I directed the design and reviewed some of the changes, but the code hasn't had a full review.
 
 nicedelay sits between OBS and Twitch/YouTube and keeps recording the last few minutes of your stream. Because it's always recording, turning a delay on doesn't make viewers wait while a buffer fills: the stream jumps back right away, with a rewind animation and sound so viewers know what happened. A badge in the corner always tells viewers where they are: "LIVE", or "10s delay" while the delay is on. Drag it in the dashboard's preview to move it. Going live again fast-forwards to the present the same way.
 
@@ -78,3 +80,7 @@ npm run check      # typecheck (tsc 7) · lint (oxlint, type-aware + SonarQube r
 The SonarQube rules (`npm run lint:sonar`) come from `eslint-plugin-sonarjs`, which still needs the TypeScript 6 compiler API. They live in `tools/sonar` with their own dependencies, installed automatically by `npm install`.
 
 The server runs TypeScript directly on Node (type stripping). `tsc` only type-checks.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

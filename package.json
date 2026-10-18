@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Instant stream delay for OBS: always recording, so delay starts without waiting, with on-stream rewind animations",
+  "license": "MIT",
   "type": "module",
   "main": "src/server/server.ts",
   "scripts": {
