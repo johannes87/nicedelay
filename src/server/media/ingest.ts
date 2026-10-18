@@ -235,7 +235,12 @@ export class Ingest extends EventEmitter<IngestEvents> {
       }
     });
 
+    // The fps filter repeats each keyframe. Repeats share one buffer: that saves memory,
+    // and the scrub can reuse the upscaled picture instead of scaling it again.
+    let lastThumb: Buffer | null = null;
     const thumbAsm = new FrameAssembler(frameBytes(tw, th), (frame) => {
+      if (lastThumb?.equals(frame)) frame = lastThumb;
+      else lastThumb = frame;
       this.store.addThumb(session.base + thumbs / rate, frame);
       thumbs++;
     });

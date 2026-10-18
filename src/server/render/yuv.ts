@@ -39,7 +39,11 @@ function axisTable(src: number, dst: number): AxisTable {
   return t;
 }
 
+/** Scratch rows for scalePlane, reused across calls. */
+let rowBuf = new Int32Array(0);
+
 // Bilinear scale of one plane with a fused linear tone map: out = v * mul/256 + add.
+// Separable: each source row is scaled horizontally once, then output rows blend two of those.
 function scalePlane(
   src: Uint8Array,
   so: number,
@@ -55,20 +59,24 @@ function scalePlane(
   const tx = axisTable(sw, dw);
   const ty = axisTable(sh, dh);
   const { i0: x0, i1: x1, wt: wx } = tx;
+  if (rowBuf.length < sh * dw) rowBuf = new Int32Array(sh * dw);
+  const rows = rowBuf;
+  for (let y = 0; y < sh; y++) {
+    const r = so + y * sw;
+    let o = y * dw;
+    for (let x = 0; x < dw; x++, o++) {
+      const a = src[r + x0[x]];
+      rows[o] = (a << 8) + (src[r + x1[x]] - a) * wx[x];
+    }
+  }
   for (let y = 0; y < dh; y++) {
-    const r0 = so + ty.i0[y] * sw;
-    const r1 = so + ty.i1[y] * sw;
+    const r0 = ty.i0[y] * dw;
+    const r1 = ty.i1[y] * dw;
     const wy = ty.wt[y];
     let o = dOff + y * dw;
     for (let x = 0; x < dw; x++, o++) {
-      const ax = x0[x];
-      const bx = x1[x];
-      const w = wx[x];
-      const a = src[r0 + ax];
-      const top = (a << 8) + (src[r0 + bx] - a) * w;
-      const c = src[r1 + ax];
-      const bot = (c << 8) + (src[r1 + bx] - c) * w;
-      const v = ((top << 8) + (bot - top) * wy) >> 16;
+      const top = rows[r0 + x];
+      const v = ((top << 8) + (rows[r1 + x] - top) * wy) >> 16;
       dst[o] = (v * mul + add) >> 8;
     }
   }

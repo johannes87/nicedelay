@@ -187,8 +187,10 @@ export class Playout extends EventEmitter<PlayoutEvents> {
         t0 = now - n * period;
         due = 1;
       }
+      // While catching up, animation frames repeat their picture instead of drawing a new
+      // one: a slow machine gets a choppier animation instead of dropped output frames.
       for (let i = 0; i < due && this.clockRunning; i++) {
-        this.tick();
+        this.tick(i < due - 1);
         n++;
       }
       this.timer = setTimeout(
@@ -273,11 +275,12 @@ export class Playout extends EventEmitter<PlayoutEvents> {
 
   // ---------------------------------------------------------------- per frame
 
-  private tick(): void {
+  /** `late`: more frames are already due after this one. */
+  private tick(late = false): void {
     this.ticks++;
     let out: AVFrame | null;
     if (this.transition) {
-      out = this.transition.render(); // may repeat the previous frame: not ours to draw on
+      out = this.transition.render(late); // may repeat the previous frame: not ours to draw on
       if (this.transition.done) this.finishTransition();
     } else {
       out = this.pullSource();
@@ -630,12 +633,13 @@ class Transition {
     return this.target.reader.ready;
   }
 
-  render(): AVFrame {
+  /** `late`: the clock is catching up, so this frame repeats the last picture if it can. */
+  render(late = false): AVFrame {
     const t = this.i / this.fps;
     const audioOff = this.i * this.playout.audioBytes;
     // Sources and audio advance every frame; the picture is redrawn only every few frames.
     const video =
-      this.i % this.drawEvery === 0 || !this.drawn
+      (this.i % this.drawEvery === 0 && !late) || !this.drawn
         ? Buffer.allocUnsafe(this.playout.frameBytes)
         : null;
     this.i++;
