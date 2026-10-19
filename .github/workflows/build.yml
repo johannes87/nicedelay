@@ -51,9 +51,11 @@ jobs:
       - name: FFmpeg (LGPL, from vcpkg.json)
         run: |
           dir=$(scripts/build-ffmpeg.sh)
+          # Git Bash prints /d/a/... paths, which Windows can't search for DLLs
+          if [ "$RUNNER_OS" = Windows ]; then dir=$(cygpath -m "$dir"); fi
           echo "FFMPEG_DIR=$dir" >> "$GITHUB_ENV"
           # Windows finds DLLs on PATH (for the tests)
-          echo "$dir/bin" >> "$GITHUB_PATH"
+          if [ "$RUNNER_OS" = Windows ]; then cygpath -w "$dir/bin" >> "$GITHUB_PATH"; else echo "$dir/bin" >> "$GITHUB_PATH"; fi
 
       - uses: Swatinem/rust-cache@v2
 
