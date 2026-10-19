@@ -23,7 +23,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: System packages (Linux)
         if: runner.os == 'Linux'
@@ -43,7 +43,7 @@ jobs:
         run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
 
       # FFmpeg changes only when its recipe does: cache the built libraries by recipe.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .ffmpeg
           key: ffmpeg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/**', 'vcpkg-ports/**', 'scripts/build-ffmpeg.sh') }}
@@ -69,7 +69,7 @@ jobs:
       - run: cargo build --locked --release
       - run: scripts/package.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: nicedelay-${{ runner.os }}
           path: |
