@@ -49,6 +49,7 @@ VCPKG=$VCPKG_ROOT/vcpkg
   --x-manifest-root="$HERE" \
   --x-install-root="$INSTALL_ROOT" \
   --overlay-triplets="$HERE/vcpkg-triplets" \
+  --overlay-ports="$HERE/vcpkg-ports" \
   --triplet="$TRIPLET" \
   --host-triplet="$TRIPLET" \
   --clean-after-build >&2

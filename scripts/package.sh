@@ -129,7 +129,7 @@ if [ ! -f "$OUT/ffmpeg-source.tar.gz" ]; then
     exit 1
   fi
   cp -R "$PORT" "$STAGE/ffmpeg-source/vcpkg-port"
-  cp -R vcpkg.json vcpkg-triplets "$STAGE/ffmpeg-source/"
+  cp -R vcpkg.json vcpkg-triplets vcpkg-ports "$STAGE/ffmpeg-source/"
   tar -C "$STAGE" -czf "$OUT/ffmpeg-source.tar.gz" ffmpeg-source
   echo "$OUT/ffmpeg-source.tar.gz"
 fi

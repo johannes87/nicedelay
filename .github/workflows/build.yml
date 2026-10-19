@@ -46,7 +46,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: .ffmpeg
-          key: ffmpeg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/**', 'scripts/build-ffmpeg.sh') }}
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/**', 'vcpkg-ports/**', 'scripts/build-ffmpeg.sh') }}
 
       - name: FFmpeg (LGPL, from vcpkg.json)
         run: |
