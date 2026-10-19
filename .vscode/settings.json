@@ -1,5 +1,0 @@
-{
-  // This project lints with Oxlint and formats with Oxfmt (see package.json).
-  // Turn off the Biome extension here so it doesn't report conflicting issues.
-  "biome.enabled": false
-}

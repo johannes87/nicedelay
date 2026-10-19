@@ -1,0 +1,85 @@
+name: build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write # attaching packages to releases
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+          - os: ubuntu-24.04
+          - os: windows-2025
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: System packages (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nasm pkg-config autoconf autoconf-archive automake libtool bison flex \
+            python3-jinja2 meson libdrm-dev libclang-dev \
+            libxkbcommon-dev libwayland-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev libgl1-mesa-dev \
+            libfontconfig1-dev libfreetype-dev
+
+      - name: System packages (macOS)
+        if: runner.os == 'macOS'
+        run: brew install pkg-config nasm
+
+      - name: libclang for bindgen (Windows)
+        if: runner.os == 'Windows'
+        run: echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" >> "$GITHUB_ENV"
+
+      # FFmpeg changes only when its recipe does: cache the built libraries by recipe.
+      - uses: actions/cache@v4
+        with:
+          path: .ffmpeg
+          key: ffmpeg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-triplets/**', 'scripts/build-ffmpeg.sh') }}
+
+      - name: FFmpeg (LGPL, from vcpkg.json)
+        run: |
+          dir=$(scripts/build-ffmpeg.sh)
+          echo "FFMPEG_DIR=$dir" >> "$GITHUB_ENV"
+          # Windows finds DLLs on PATH (for the tests)
+          echo "$dir/bin" >> "$GITHUB_PATH"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-about
+
+      - run: cargo fmt --check
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - run: cargo build --locked --release
+      - run: scripts/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nicedelay-${{ runner.os }}
+          path: |
+            dist/*.dmg
+            dist/*.zip
+            dist/*.tar.gz
+
+      - name: Attach to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" --notes ""
+          files=(dist/*.dmg dist/*.zip dist/*.tar.gz)
+          for f in "${files[@]}"; do [ -e "$f" ] && gh release upload "$GITHUB_REF_NAME" "$f" --clobber; done

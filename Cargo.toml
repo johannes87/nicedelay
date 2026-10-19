@@ -1,0 +1,34 @@
+[package]
+name = "nicedelay"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+description = "Instant stream delay for OBS: always recording, so delay starts without waiting, with on-stream rewind animations"
+license = "MIT"
+repository = "https://github.com/johannes87/nicedelay"
+publish = false
+
+[dependencies]
+# FFmpeg's libraries (LGPL build from vcpkg.json); no avdevice/avfilter.
+ffmpeg-next = { version = "9.0", default-features = false, features = ["codec", "format", "software-scaling", "software-resampling"] }
+skia-safe = { version = "0.153", features = ["textlayout"] }
+eframe = "0.37"
+egui = "0.37"
+axum = "0.8"
+tokio = { version = "1.53", features = ["rt-multi-thread", "net", "macros", "sync", "signal"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+directories = "6.0"
+memchr = "2.8"
+
+[profile.dev]
+# Pixel and codec glue is far too slow unoptimised to run a 60 fps stream.
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"

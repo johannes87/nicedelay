@@ -1,0 +1,23 @@
+{
+  "$comment": "FFmpeg for nicedelay: LGPL only (no gpl/nonfree features), hardware codecs per platform. Build with scripts/build-ffmpeg.sh.",
+  "name": "nicedelay",
+  "version-string": "0.1.0",
+  "builtin-baseline": "664933b8d385dfc01f4e0cdff4c7c74e71f6a740",
+  "dependencies": [
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "avcodec",
+        "avformat",
+        "swscale",
+        "swresample",
+        { "name": "openssl", "platform": "!windows" },
+        { "name": "nvcodec", "platform": "x64 & (windows | linux)" },
+        { "name": "amf", "platform": "x64 & windows" },
+        { "name": "qsv", "platform": "x64 & (windows | linux)" },
+        { "name": "vaapi", "platform": "linux" }
+      ]
+    }
+  ]
+}

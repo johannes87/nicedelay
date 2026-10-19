@@ -1,0 +1,13 @@
+Rust crates compiled into nicedelay, by licence. Each crate's source code is available
+at https://crates.io/crates/<name>/<version> (this includes the source code of the crates
+under the Mozilla Public License 2.0).
+{{#each licenses}}
+
+================================================================================
+{{{name}}} — used by:
+{{#each used_by}}    {{crate.name}} {{crate.version}}
+{{/each}}
+--------------------------------------------------------------------------------
+
+{{{text}}}
+{{/each}}
