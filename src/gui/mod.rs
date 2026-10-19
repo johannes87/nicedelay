@@ -21,13 +21,19 @@ use crate::state::{AppState, CommandResult, Mode, TransitionEvent, TransitionKin
 /// The preview runs this far behind the stream (encoder thread and repaint).
 const PREVIEW_LATENCY: f64 = 0.1;
 const DELAY_OPTIONS: &[f64] = &[5.0, 10.0, 30.0, 60.0, 120.0, 300.0];
+/// The logo as the app's icon (scripts/icons.sh); on macOS on the rounded square its icons have.
+#[cfg(target_os = "macos")]
+const ICON: &[u8] = include_bytes!("../../assets/icon/icon-macos.png");
+#[cfg(not(target_os = "macos"))]
+const ICON: &[u8] = include_bytes!("../../assets/icon/icon.png");
 
 pub fn run(app: Arc<App>) -> Result<(), String> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("nicedelay")
             .with_inner_size([1080.0, 720.0])
-            .with_min_inner_size([480.0, 600.0]),
+            .with_min_inner_size([480.0, 600.0])
+            .with_icon(Arc::new(eframe::icon_data::from_png_bytes(ICON).expect("icon is a valid PNG"))),
         ..Default::default()
     };
     eframe::run_native(

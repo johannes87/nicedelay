@@ -47,6 +47,7 @@ Darwin)
   APP=$STAGE/nicedelay.app
   mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
   cp target/release/nicedelay "$APP/Contents/MacOS/"
+  cp assets/icon/icon.icns "$APP/Contents/Resources/nicedelay.icns"
   # The libraries the program needs, and the ones they need, by their @rpath names.
   todo=("$APP/Contents/MacOS/nicedelay")
   while [ ${#todo[@]} -gt 0 ]; do
@@ -76,6 +77,7 @@ Darwin)
   <key>CFBundleVersion</key><string>$VERSION</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleExecutable</key><string>nicedelay</string>
+  <key>CFBundleIconFile</key><string>nicedelay</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>NSHighResolutionCapable</key><true/>

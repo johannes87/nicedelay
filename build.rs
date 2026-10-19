@@ -15,4 +15,10 @@ fn main() {
     {
         println!("cargo:rustc-link-arg=-Wl,-rpath,{dir}/lib");
     }
+    // The icon Explorer and the taskbar show for nicedelay.exe.
+    #[cfg(windows)]
+    if os == "windows" {
+        println!("cargo:rerun-if-changed=assets/icon/icon.ico");
+        winresource::WindowsResource::new().set_icon("assets/icon/icon.ico").compile().expect("Windows resources");
+    }
 }
